@@ -4,7 +4,7 @@ use anyhow::Context;
 const TEMPERATURE: f32 = 0.0;
 
 /// Minimum number of tokens to be able to generate in the completion.
-const MIN_MAX_TOKENS: usize = 16;
+const MIN_MAX_TOKENS: usize = 64;
 
 /// Available `OpenAI` models sorted by their prices.
 const MODELS: [&str; 4] = [
