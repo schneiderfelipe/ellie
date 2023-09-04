@@ -110,7 +110,8 @@ fn create_request(
 }
 
 fn main() -> anyhow::Result<()> {
-    let input = read_input()?;
+    let raw_input = read_input()?;
+    let input = raw_input.trim();
     let message = create_user_message(input)?;
     let request = create_request(message)?;
     println!("{request:#?}");
