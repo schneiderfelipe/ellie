@@ -120,5 +120,6 @@ async fn main() -> anyhow::Result<()> {
         .create_stream(request)
         .await?;
     // println!("{stream:#?}");
+    // TODO: get, print, store (trimmed) user/assistant pair
     Ok(())
 }
