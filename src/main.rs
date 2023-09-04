@@ -4,7 +4,7 @@ use anyhow::Context;
 const TEMPERATURE: f32 = 0.0;
 
 /// Minimum number of tokens to be able to generate in the completion.
-const MIN_MAX_TOKENS: usize = 64;
+const MIN_COMPLETION_TOKENS: usize = 256;
 
 /// Available `OpenAI` models sorted by their prices.
 const MODELS: [&str; 4] = [
@@ -26,7 +26,7 @@ fn messages_fit_model(
 ) -> anyhow::Result<bool> {
     Ok(
         tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)?
-            >= MIN_MAX_TOKENS,
+            >= MIN_COMPLETION_TOKENS,
     )
 }
 
