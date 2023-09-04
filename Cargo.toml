@@ -16,3 +16,4 @@ rust-version = "1.56.1"
 anyhow = "1.0.75"
 async-openai = "0.14.0"
 tiktoken-rs = { version = "0.5.3", features = ["async-openai"] }
+tokio = { version = "1.32.0", features = ["rt-multi-thread"] }
