@@ -6,6 +6,7 @@ license = "MIT"
 
 authors = ["Felipe S. S. Schneider <schneider.felipe.5@gmail.com>"]
 repository = "https://github.com/schneiderfelipe/ellie"
+rust-version = "1.56.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
