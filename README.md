@@ -1,5 +1,16 @@
 # ellie
 
+[![Build Status]][actions]
+[![Latest Version]][crates.io]
+[![Documentation]][docs.rs]
+
+[Build Status]: https://github.com/schneiderfelipe/ellie/actions/workflows/rust.yml/badge.svg
+[actions]: https://github.com/schneiderfelipe/ellie/actions/workflows/rust.yml
+[Latest Version]: https://img.shields.io/crates/v/ellie.svg
+[crates.io]: https://crates.io/crates/ellie
+[Documentation]: https://img.shields.io/docsrs/ellie
+[docs.rs]: https://docs.rs/ellie
+
 Urban broccoli.
 
 ## Draft
