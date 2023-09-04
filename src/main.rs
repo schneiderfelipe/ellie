@@ -1,5 +1,8 @@
 use anyhow::Context;
 
+/// Temperature used in all requests.
+const TEMPERATURE: f32 = 0.0;
+
 /// Minimum number of tokens to be able to generate in the completion.
 const MIN_MAX_TOKENS: usize = 16;
 
@@ -27,6 +30,15 @@ fn messages_fit_model(
     )
 }
 
+/// Retrieve context messages for the given message.
+#[inline]
+fn retrieve_messages(
+    message: async_openai::types::ChatCompletionRequestMessage,
+) -> Vec<async_openai::types::ChatCompletionRequestMessage> {
+    // TODO: actually get messages
+    vec![message]
+}
+
 /// Find the cheapest model with large enough context length for the given
 /// messages.
 ///
@@ -35,7 +47,7 @@ fn messages_fit_model(
 #[inline]
 fn choose_model(
     messages: &[async_openai::types::ChatCompletionRequestMessage],
-) -> anyhow::Result<impl Into<String>> {
+) -> anyhow::Result<&'static str> {
     MODELS
         .into_iter()
         .find(|model| {
@@ -43,6 +55,16 @@ fn choose_model(
                 .expect("model retrieval of known models should never fail")
         })
         .context("no model with large enough context length could be found for the given messages")
+}
+
+/// Read the whole standard input.
+///
+/// # Errors
+/// If the input contains invalid UTF-8 or any other situation where
+/// [`std::io::read_to_string`] fails.
+#[inline]
+fn read_input() -> std::io::Result<String> {
+    std::io::read_to_string(std::io::stdin().lock())
 }
 
 /// Create a user message for the given input.
@@ -76,27 +98,19 @@ fn create_user_message(
 fn create_request(
     message: async_openai::types::ChatCompletionRequestMessage,
 ) -> anyhow::Result<async_openai::types::CreateChatCompletionRequest> {
-    let temperature = 0.0;
-    let messages = retrieve_messages(message).into();
+    let messages = retrieve_messages(message);
     let model = choose_model(&messages)?;
     Ok(
         async_openai::types::CreateChatCompletionRequestArgs::default()
-            .temperature(temperature)
+            .temperature(TEMPERATURE)
             .messages(messages)
             .model(model)
             .build()?,
     )
 }
 
-#[inline]
-fn retrieve_messages(
-    message: async_openai::types::ChatCompletionRequestMessage,
-) -> impl Into<Vec<async_openai::types::ChatCompletionRequestMessage>> {
-    [message]
-}
-
 fn main() -> anyhow::Result<()> {
-    let input = std::io::read_to_string(std::io::stdin())?;
+    let input = read_input()?;
     let message = create_user_message(input)?;
     let request = create_request(message)?;
     println!("{request:#?}");
