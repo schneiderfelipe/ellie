@@ -7,20 +7,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[inline]
 fn create_request(
-    input: String,
+    input: impl Into<String>,
 ) -> Result<async_openai::types::CreateChatCompletionRequest, async_openai::error::OpenAIError> {
-    let model = "gpt-3.5-turbo";
-    let max_tokens = 512u16;
+    let temperature = 0.0;
     let messages = [
         async_openai::types::ChatCompletionRequestMessageArgs::default()
-            .content(input)
             .role(async_openai::types::Role::User)
+            .content(input)
             .build()?,
     ];
+    let model = "gpt-3.5-turbo";
 
     async_openai::types::CreateChatCompletionRequestArgs::default()
-        .model(model)
-        .max_tokens(max_tokens)
+        .temperature(temperature)
         .messages(messages)
+        .model(model)
         .build()
 }
