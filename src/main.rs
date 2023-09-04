@@ -10,8 +10,8 @@ fn create_request(
     input: impl Into<String>,
 ) -> Result<async_openai::types::CreateChatCompletionRequest, async_openai::error::OpenAIError> {
     let temperature = 0.0;
-    let messages = retrieve_messages(input)?;
-    let model = "gpt-3.5-turbo";
+    let messages = retrieve_messages(input)?.into();
+    let model = choose_model(&messages);
 
     async_openai::types::CreateChatCompletionRequestArgs::default()
         .temperature(temperature)
@@ -35,4 +35,11 @@ fn retrieve_messages(
     ];
 
     Ok(messages)
+}
+
+#[inline]
+fn choose_model(
+    _messages: &[async_openai::types::ChatCompletionRequestMessage],
+) -> impl Into<String> {
+    "gpt-3.5-turbo"
 }
