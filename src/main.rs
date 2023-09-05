@@ -117,7 +117,7 @@ async fn handle_response(
 
     let mut stdout = tokio::io::stdout();
     let mut buffer = String::new();
-    while let Some(result) = response.next().await {
+    'outer: while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
@@ -148,7 +148,7 @@ async fn handle_response(
                     if let Some(finish_reason) = finish_reason {
                         // TODO: we might want to return or break from here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
                         match finish_reason.as_str() {
-                            "stop" => unimplemented!(),
+                            "stop" => break 'outer,
                             "length" => unimplemented!(),
                             "function_call" => unimplemented!(),
                             finish_reason => {
