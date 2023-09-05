@@ -145,9 +145,17 @@ async fn handle_response(
                         // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
                         unimplemented!()
                     }
-                    if finish_reason.is_some() {
+                    if let Some(finish_reason) = finish_reason {
                         // TODO: we might want to return or break from here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
-                        unimplemented!()
+                        match finish_reason.as_str() {
+                            "stop" => unimplemented!(),
+                            "length" => unimplemented!(),
+                            "function_call" => unimplemented!(),
+                            finish_reason => {
+                                // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
+                                unreachable!("impossible finish reason: {finish_reason}")
+                            }
+                        }
                     }
                 }
             }
