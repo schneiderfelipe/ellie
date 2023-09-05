@@ -203,6 +203,33 @@ async fn main() -> anyhow::Result<()> {
     let response = create_response(request).await?;
     let assistant_message = create_assistant_message(response).await?;
 
+    update_new_messages(&mut new_messages, assistant_message)?;
+
+    // TODO: loop until we get a standard assistant response
+
+    // TODO: store new messages with atomicity guarantees: if
+    // something fails,
+    // nothing is stored,
+    // so better store everything at the end.
+
+    Ok(())
+}
+
+#[inline]
+fn create_function_call_message(
+    _name: &str,
+    _arguments: &str,
+) -> std::io::Result<aot::ChatCompletionRequestMessage> {
+    // TODO: eventually call functions,
+    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+    unimplemented!()
+}
+
+#[inline]
+fn update_new_messages(
+    new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
+    assistant_message: aot::ChatCompletionRequestMessage,
+) -> anyhow::Result<()> {
     match assistant_message {
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,
@@ -228,30 +255,9 @@ async fn main() -> anyhow::Result<()> {
                     .build()?,
             );
             new_messages.push(function_call_message);
-
-            // TODO: "and loop" until we get a standard assistant response
         }
         assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
     }
 
-    // TODO: create user/assistant pair,
-    // and store.
-    // Should probably store
-    // intermediate function calls as well.
-    // Should have atomicity guarantees: if
-    // something fails,
-    // nothing is stored,
-    // so better store everything at the end.
-
     Ok(())
-}
-
-#[inline]
-fn create_function_call_message(
-    _name: &str,
-    _arguments: &str,
-) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
-    // TODO: eventually call functions,
-    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
-    unimplemented!()
 }
