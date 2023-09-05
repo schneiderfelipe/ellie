@@ -1,4 +1,8 @@
+use std::io::Write;
+
 use anyhow::Context;
+use async_openai::types as aot;
+use futures::StreamExt;
 
 /// Temperature used in all requests.
 const TEMPERATURE: f32 = 0.0;
@@ -22,7 +26,7 @@ const MODELS: [&str; 4] = [
 #[inline]
 fn messages_fit_model(
     model: &str,
-    messages: &[async_openai::types::ChatCompletionRequestMessage],
+    messages: &[aot::ChatCompletionRequestMessage],
 ) -> anyhow::Result<bool> {
     Ok(
         tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)?
@@ -33,19 +37,14 @@ fn messages_fit_model(
 /// Find the cheapest model with large enough context length for the given
 /// messages.
 ///
-/// # Errors
-/// If no model with large enough context length can be found.
+/// If no model with large enough context length can be found, this returns
+/// [`None`].
 #[inline]
-fn choose_model(
-    messages: &[async_openai::types::ChatCompletionRequestMessage],
-) -> anyhow::Result<&'static str> {
-    MODELS
-        .into_iter()
-        .find(|model| {
-            messages_fit_model(model, messages)
-                .expect("model retrieval of known models should never fail")
-        })
-        .context("no model with large enough context length could be found for the given messages")
+fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'static str> {
+    MODELS.into_iter().find(|model| {
+        messages_fit_model(model, messages)
+            .expect("model retrieval of known models should never fail")
+    })
 }
 
 /// Read the whole standard input.
@@ -65,13 +64,11 @@ fn read_input() -> std::io::Result<String> {
 #[inline]
 fn create_user_message(
     input: impl Into<String>,
-) -> anyhow::Result<async_openai::types::ChatCompletionRequestMessage> {
-    let messages = [
-        async_openai::types::ChatCompletionRequestMessageArgs::default()
-            .role(async_openai::types::Role::User)
-            .content(input)
-            .build()?,
-    ];
+) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+    let messages = [aot::ChatCompletionRequestMessageArgs::default()
+        .role(aot::Role::User)
+        .content(input)
+        .build()?];
     anyhow::ensure!(
         messages_fit_model(MODELS[0], &messages)?,
         "user input should fit the cheapest model alone"
@@ -83,8 +80,8 @@ fn create_user_message(
 /// Retrieve chat messages for the given message.
 #[inline]
 fn create_chat_messages(
-    message: async_openai::types::ChatCompletionRequestMessage,
-) -> Vec<async_openai::types::ChatCompletionRequestMessage> {
+    message: aot::ChatCompletionRequestMessage,
+) -> Vec<aot::ChatCompletionRequestMessage> {
     // TODO: actually get messages
     vec![message]
 }
@@ -96,16 +93,50 @@ fn create_chat_messages(
 /// the given message.
 #[inline]
 fn create_request(
-    messages: Vec<async_openai::types::ChatCompletionRequestMessage>,
-) -> anyhow::Result<async_openai::types::CreateChatCompletionRequest> {
-    let model = choose_model(&messages)?;
-    Ok(
-        async_openai::types::CreateChatCompletionRequestArgs::default()
-            .temperature(TEMPERATURE)
-            .messages(messages)
-            .model(model)
-            .build()?,
-    )
+    messages: Vec<aot::ChatCompletionRequestMessage>,
+) -> anyhow::Result<aot::CreateChatCompletionRequest> {
+    let model = choose_model(&messages).context(
+        "no model with large enough context length could be found for the given messages",
+    )?;
+    Ok(aot::CreateChatCompletionRequestArgs::default()
+        .temperature(TEMPERATURE)
+        .messages(messages)
+        .model(model)
+        .build()?)
+}
+
+#[inline]
+async fn create_stream(
+    request: aot::CreateChatCompletionRequest,
+) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
+    async_openai::Client::new()
+        .chat()
+        .create_stream(request)
+        .await
+}
+
+#[inline]
+async fn create_response(mut stream: aot::ChatCompletionResponseStream) -> anyhow::Result<String> {
+    let mut stdout = std::io::stdout().lock();
+    while let Some(result) = stream.next().await {
+        match result {
+            Err(err) => anyhow::bail!(err),
+            Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
+                choices.into_iter().try_for_each(
+                    |aot::ChatCompletionResponseStreamMessage {
+                         delta: aot::ChatCompletionStreamResponseDelta { content, .. },
+                         ..
+                     }| match content {
+                        None => Ok(()),
+                        Some(ref content) => write!(stdout, "{content}"),
+                    },
+                )?
+            }
+        }
+    }
+    // stdout.flush()?; // TODO: do I need it? Isn't it flushed at the end?
+    // TODO: create user/assistant pair, trim response and store
+    Ok(String::new())
 }
 
 #[tokio::main]
@@ -115,11 +146,7 @@ async fn main() -> anyhow::Result<()> {
     let message = create_user_message(input)?;
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
-    let _stream = async_openai::Client::new()
-        .chat()
-        .create_stream(request)
-        .await?;
-    // println!("{stream:#?}");
-    // TODO: get, print, store (trimmed) user/assistant pair
+    let stream = create_stream(request).await?;
+    let _response = create_response(stream).await?;
     Ok(())
 }
