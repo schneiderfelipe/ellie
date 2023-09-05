@@ -92,6 +92,21 @@ fn create_request(
         .model(model)
         // TODO: we could add the user name here
         // TODO: function specifications will be added in the future here
+        // .functions([aot::ChatCompletionFunctionsArgs::default()
+        //     .name("get_current_weather")
+        //     .description("Get the current weather in a given location")
+        //     .parameters(serde_json::json!({
+        //         "type": "object",
+        //         "properties": {
+        //             "location": {
+        //                 "type": "string",
+        //                 "description": "The city and state, e.g. San Francisco, CA",
+        //             },
+        //             "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
+        //         },
+        //         "required": ["location"],
+        //     }))
+        //     .build()?])
         .build()?)
 }
 
