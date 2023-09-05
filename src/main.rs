@@ -147,9 +147,9 @@ async fn main() -> anyhow::Result<()> {
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
     let response = create_response(request).await?;
-    let output = handle_response(response).await?;
+    let _output = handle_response(response).await?;
 
-    println!("{output}");
+    // println!("{output}");
     // TODO: create user/assistant pair, trim output and store
     Ok(())
 }
