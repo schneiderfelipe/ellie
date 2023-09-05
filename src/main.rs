@@ -107,35 +107,34 @@ async fn create_response(
 async fn handle_response(
     mut response: aot::ChatCompletionResponseStream,
 ) -> anyhow::Result<String> {
-    use std::{fmt::Write as _, io::Write as _};
+    use std::fmt::Write as _;
 
     use futures::StreamExt as _;
+    use tokio::io::AsyncWriteExt as _;
 
-    let mut stdout = std::io::stdout().lock();
+    let mut stdout = tokio::io::stdout();
     let mut buffer = String::new();
     while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
-                choices.into_iter().try_for_each(
-                    |aot::ChatCompletionResponseStreamMessage {
-                         delta: aot::ChatCompletionStreamResponseDelta { content, .. },
-                         ..
-                     }|
-                     -> anyhow::Result<_> {
-                        // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
-                        if let Some(content) = content {
-                            write!(stdout, "{content}")?;
-                            stdout.flush()?;
-                            write!(buffer, "{content}")?;
-                        }
-                        Ok(())
-                    },
-                )?;
+                for aot::ChatCompletionResponseStreamMessage {
+                    delta: aot::ChatCompletionStreamResponseDelta { content, .. },
+                    ..
+                } in choices
+                {
+                    // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
+                    if let Some(content) = content {
+                        stdout.write_all(content.as_bytes()).await?;
+                        stdout.flush().await?;
+                        buffer.write_str(&content)?;
+                    }
+                }
             }
         }
     }
-    writeln!(stdout)?;
+    stdout.write_all(b"\n").await?;
+    stdout.shutdown().await?;
     Ok(buffer)
 }
 
