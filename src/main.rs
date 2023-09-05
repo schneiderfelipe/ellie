@@ -4,7 +4,7 @@ use async_openai::types as aot;
 const TEMPERATURE: f32 = 0.0;
 
 /// Minimum number of tokens to be able to generate in the completion.
-const MIN_COMPLETION_TOKENS: usize = 256;
+const MIN_COMPLETION_TOKENS: usize = 512;
 
 /// Available `OpenAI` models sorted by their prices.
 const MODELS: [&str; 4] = [
@@ -148,8 +148,7 @@ async fn handle_response(
                     if let Some(finish_reason) = finish_reason {
                         // TODO: we might want to return or break from here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
                         match finish_reason.as_str() {
-                            "stop" => break 'outer,
-                            "length" => unimplemented!(),
+                            "stop" | "length" => break 'outer,
                             "function_call" => unimplemented!(),
                             finish_reason => {
                                 // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
