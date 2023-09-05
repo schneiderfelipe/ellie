@@ -137,19 +137,15 @@ async fn handle_response(
                         stdout.flush().await?;
                         buffer.write_str(&content)?;
                     }
-                    if let Some(aot::FunctionCallStream {
-                        name: _,
-                        arguments: _,
-                    }) = function_call
-                    {
+                    if let Some(aot::FunctionCallStream { name, arguments }) = function_call {
                         // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
-                        unimplemented!()
+                        unimplemented!("function call {name:?} {arguments:?}")
                     }
                     if let Some(finish_reason) = finish_reason {
-                        // TODO: we might want to return or break from here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
+                        // TODO: we might want to return instead of breaking, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
                         match finish_reason.as_str() {
                             "stop" | "length" => break 'outer,
-                            "function_call" => unimplemented!(),
+                            "function_call" => unimplemented!("function call"),
                             finish_reason => {
                                 // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
                                 unreachable!("impossible finish reason: {finish_reason}")
