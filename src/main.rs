@@ -213,16 +213,23 @@ async fn main() -> anyhow::Result<()> {
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,
             content: None,
-            function_call: Some(_),
+            function_call: Some(aot::FunctionCall { name, arguments }),
             ..
         } => {
-            // TODO: eventually call functions,
-            // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+            let arguments = serde_json::from_str::<serde_json::Value>(&arguments)
+                .and_then(|value| serde_json::to_string(&value))
+                .unwrap_or(arguments);
+            let function_call_message = create_function_call_message(&name, &arguments)?;
+
+            new_messages.push(
+                aot::ChatCompletionRequestMessageArgs::default()
+                    .role(aot::Role::Assistant)
+                    .function_call(aot::FunctionCall { name, arguments })
+                    .build()?,
+            );
+            new_messages.push(function_call_message);
 
             // TODO: "and loop" until we get a standard assistant response
-
-            new_messages.push(assistant_message);
-            unimplemented!("function call: {function_call:?}")
         }
         assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
     }
@@ -237,4 +244,14 @@ async fn main() -> anyhow::Result<()> {
     // so better store everything at the end.
 
     Ok(())
+}
+
+#[inline]
+fn create_function_call_message(
+    _name: &str,
+    _arguments: &str,
+) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+    // TODO: eventually call functions,
+    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+    unimplemented!()
 }
