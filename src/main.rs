@@ -108,7 +108,7 @@ async fn create_response(
 #[inline]
 async fn handle_response(
     mut response: aot::ChatCompletionResponseStream,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
     use std::fmt::Write as _;
 
     use futures::StreamExt as _;
@@ -116,6 +116,8 @@ async fn handle_response(
 
     let mut stdout = tokio::io::stdout();
     let mut content_buffer = String::new();
+    let mut func_call_name = String::new();
+    let mut func_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
@@ -137,8 +139,12 @@ async fn handle_response(
                         content_buffer.write_str(&content)?;
                     }
                     if let Some(aot::FunctionCallStream { name, arguments }) = function_call {
-                        // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
-                        unimplemented!("function call {name:?} {arguments:?}")
+                        if let Some(name) = name {
+                            func_call_name = name;
+                        }
+                        if let Some(arguments) = arguments {
+                            func_call_arguments_buffer.write_str(&arguments)?;
+                        }
                     }
                     if let Some(finish_reason) = finish_reason {
                         match finish_reason.as_str() {
@@ -146,13 +152,22 @@ async fn handle_response(
                                 stdout.write_all(b"\n").await?;
                                 stdout.flush().await?;
                                 stdout.shutdown().await?;
-                                return Ok(content_buffer.trim().into());
+                                return Ok(aot::ChatCompletionRequestMessageArgs::default()
+                                    .role(aot::Role::Assistant)
+                                    .content(content_buffer.trim())
+                                    .build()?);
                             }
-                            "function_call" => unimplemented!("function call"),
+                            "function_call" => {
+                                return Ok(aot::ChatCompletionRequestMessageArgs::default()
+                                    .role(aot::Role::Assistant)
+                                    .function_call(aot::FunctionCall {
+                                        name: func_call_name.trim().into(),
+                                        arguments: func_call_arguments_buffer.trim().into(),
+                                    })
+                                    .build()?)
+                            }
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
-                            finish_reason => {
-                                unreachable!("impossible finish reason: {finish_reason}")
-                            }
+                            finish_reason => unreachable!("bad finish reason: {finish_reason}"),
                         }
                     }
                 }
