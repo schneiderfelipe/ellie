@@ -91,7 +91,7 @@ fn create_chat_messages(
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
 ) -> anyhow::Result<aot::CreateChatCompletionRequest> {
-    use anyhow::Context;
+    use anyhow::Context as _;
 
     let model = choose_model(&messages).context(
         "no model with large enough context length could be found for the given messages",
@@ -104,7 +104,7 @@ fn create_request(
 }
 
 #[inline]
-async fn create_stream(
+async fn create_response(
     request: aot::CreateChatCompletionRequest,
 ) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
     async_openai::Client::new()
@@ -114,14 +114,14 @@ async fn create_stream(
 }
 
 #[inline]
-async fn create_response(mut stream: aot::ChatCompletionResponseStream) -> anyhow::Result<String> {
-    use std::{fmt::Write as _, io::Write};
+async fn write_output(mut response: aot::ChatCompletionResponseStream) -> anyhow::Result<String> {
+    use std::{fmt::Write as _, io::Write as _};
 
-    use futures::StreamExt;
+    use futures::StreamExt as _;
 
     let mut stdout = std::io::stdout().lock();
     let mut buffer = String::new();
-    while let Some(result) = stream.next().await {
+    while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
@@ -143,7 +143,6 @@ async fn create_response(mut stream: aot::ChatCompletionResponseStream) -> anyho
         }
     }
     writeln!(stdout)?;
-    // TODO: create user/assistant pair, trim response and store
     Ok(buffer)
 }
 
@@ -154,8 +153,9 @@ async fn main() -> anyhow::Result<()> {
     let message = create_user_message(input)?;
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
-    let stream = create_stream(request).await?;
-    let response = create_response(stream).await?;
-    println!("{response}");
+    let response = create_response(request).await?;
+    let output = write_output(response).await?;
+    println!("{output}");
+    // TODO: create user/assistant pair, trim output and store
     Ok(())
 }
