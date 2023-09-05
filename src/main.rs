@@ -149,7 +149,7 @@ async fn handle_response(
                 } in choices
                 {
                     if let Some(content) = content {
-                        stdout.write_all(content.as_bytes()).await?;
+                        stdout.write_all(content.as_ref()).await?;
                         stdout.flush().await?;
                         content_buffer.write_str(&content)?;
                     }
@@ -162,7 +162,7 @@ async fn handle_response(
                         }
                     }
                     if let Some(finish_reason) = finish_reason {
-                        match finish_reason.as_str() {
+                        match finish_reason.as_ref() {
                             "stop" | "length" => {
                                 stdout.write_all(b"\n").await?;
                                 stdout.flush().await?;
@@ -201,8 +201,12 @@ async fn main() -> anyhow::Result<()> {
     let response = create_response(request).await?;
     let assistance = handle_response(response).await?;
 
-    println!("{assistance:?}");
+    // TODO: eventually call functions, see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+    // TODO: "and loop" until we get a standard assistant response
+    println!("\n{assistance:?}");
 
-    // TODO: create user/assistant pair, and store
+    // TODO: create user/assistant pair, and store. Should probably store
+    // intermediate function calls as well. Should have atomicity guarantees: if
+    // something fails, nothing is stored, so better store everything at the end.
     Ok(())
 }
