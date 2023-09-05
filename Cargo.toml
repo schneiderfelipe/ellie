@@ -16,6 +16,6 @@ rust-version = "1.72.0"
 anyhow = { default-features = false, version = "1.0.75" }
 async-openai = { default-features = false, version = "0.14.0" }
 futures = { default-features = false, version = "0.3.28" }
-serde_json = "1.0.105"
+serde_json = { default-features = false, version = "1.0.105" }
 tiktoken-rs = { version = "0.5.3", features = ["async-openai"] }
 tokio = { version = "1.32.0", features = ["io-std", "rt-multi-thread"], default-features = false }
