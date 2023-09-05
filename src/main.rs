@@ -6,7 +6,7 @@ const TEMPERATURE: f32 = 0.0;
 /// Minimum number of tokens to be able to generate in the completion.
 const MIN_COMPLETION_TOKENS: usize = 512;
 
-/// Available `OpenAI` models sorted by their prices.
+/// Available `OpenAI` models sorted by price.
 const MODELS: [&str; 4] = [
     "gpt-3.5-turbo",     // $0.0015 / 1K tokens
     "gpt-3.5-turbo-16k", // $0.003  / 1K tokens
@@ -18,7 +18,7 @@ const MODELS: [&str; 4] = [
 /// messages.
 ///
 /// # Errors
-/// If the model can not be retrieved.
+/// If the model could not be retrieved.
 #[inline]
 fn messages_fit_model(
     model: &str,
@@ -33,8 +33,8 @@ fn messages_fit_model(
 /// Find the cheapest model with large enough context length for the given
 /// messages.
 ///
-/// If no model with large enough context length can be found, this returns
-/// [`None`].
+/// If no model with large enough context length can be found,
+/// this returns [`None`].
 #[inline]
 fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'static str> {
     MODELS.into_iter().find(|model| {
@@ -62,21 +62,23 @@ fn create_user_message(input: &str) -> anyhow::Result<aot::ChatCompletionRequest
     Ok(message)
 }
 
-/// Retrieve chat messages for the given message.
+/// Get chat messages ending in the given new messages,
+/// essentially building context to them.
 #[inline]
 fn create_chat_messages(
-    message: aot::ChatCompletionRequestMessage,
+    new_messages: &[aot::ChatCompletionRequestMessage],
 ) -> Vec<aot::ChatCompletionRequestMessage> {
-    // TODO: actually get messages, and split/prune to fit the context, this should
+    // TODO: actually get previous chat messages,
+    // and split/prune to fit the context,
+    // this should
     // always produce a valid context for at least *one* of the MODELS.
-    vec![message]
+    new_messages.into()
 }
 
 /// Create an `OpenAI` request.
 ///
 /// # Errors
-/// If chat messages could not be retrieved or model could not be chosen for
-/// the given message.
+/// If a model could not be chosen for the given messages.
 #[inline]
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
@@ -90,7 +92,6 @@ fn create_request(
         .temperature(TEMPERATURE)
         .messages(messages)
         .model(model)
-        // TODO: we could add the user name here
         // TODO: function specifications will be added in the future here
         // .functions([aot::ChatCompletionFunctionsArgs::default()
         //     .name("get_current_weather")
@@ -121,7 +122,7 @@ async fn create_response(
 }
 
 #[inline]
-async fn handle_response(
+async fn create_assistant_message(
     mut response: aot::ChatCompletionResponseStream,
 ) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
     use std::fmt::Write as _;
@@ -194,19 +195,46 @@ async fn handle_response(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let input = std::io::read_to_string(std::io::stdin().lock())?;
-    let message = create_user_message(&input)?;
+    let user_message = create_user_message(&input)?;
+    let mut new_messages = vec![user_message];
 
-    let messages = create_chat_messages(message);
+    let messages = create_chat_messages(&new_messages);
     let request = create_request(messages)?;
     let response = create_response(request).await?;
-    let assistance = handle_response(response).await?;
+    let assistant_message = create_assistant_message(response).await?;
 
-    // TODO: eventually call functions, see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
-    // TODO: "and loop" until we get a standard assistant response
-    println!("\n{assistance:?}");
+    match assistant_message {
+        aot::ChatCompletionRequestMessage {
+            role: aot::Role::Assistant,
+            content: Some(_),
+            function_call: None,
+            ..
+        } => new_messages.push(assistant_message),
+        aot::ChatCompletionRequestMessage {
+            role: aot::Role::Assistant,
+            content: None,
+            function_call: Some(_),
+            ..
+        } => {
+            // TODO: eventually call functions,
+            // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
 
-    // TODO: create user/assistant pair, and store. Should probably store
-    // intermediate function calls as well. Should have atomicity guarantees: if
-    // something fails, nothing is stored, so better store everything at the end.
+            // TODO: "and loop" until we get a standard assistant response
+
+            new_messages.push(assistant_message);
+            unimplemented!("function call: {function_call:?}")
+        }
+        assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
+    }
+
+    // TODO: create user/assistant pair,
+    // and store.
+    // Should probably store
+    // intermediate function calls as well.
+    // Should have atomicity guarantees: if
+    // something fails,
+    // nothing is stored,
+    // so better store everything at the end.
+
     Ok(())
 }
