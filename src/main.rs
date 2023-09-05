@@ -68,7 +68,8 @@ fn create_user_message(
 fn create_chat_messages(
     message: aot::ChatCompletionRequestMessage,
 ) -> Vec<aot::ChatCompletionRequestMessage> {
-    // TODO: actually get messages
+    // TODO: actually get messages, and split/prune to fit the context, this should
+    // always produce a valid context for at least *one* of the MODELS.
     vec![message]
 }
 
@@ -90,6 +91,8 @@ fn create_request(
         .temperature(TEMPERATURE)
         .messages(messages)
         .model(model)
+        // TODO: we could add the user name here
+        // TODO: function specifications will be added in the future here
         .build()?)
 }
 
@@ -119,15 +122,32 @@ async fn handle_response(
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
                 for aot::ChatCompletionResponseStreamMessage {
-                    delta: aot::ChatCompletionStreamResponseDelta { content, .. },
+                    delta:
+                        aot::ChatCompletionStreamResponseDelta {
+                            content,
+                            function_call,
+                            ..
+                        },
+                    finish_reason,
                     ..
                 } in choices
                 {
-                    // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
                     if let Some(content) = content {
                         stdout.write_all(content.as_bytes()).await?;
                         stdout.flush().await?;
                         buffer.write_str(&content)?;
+                    }
+                    if let Some(aot::FunctionCallStream {
+                        name: _,
+                        arguments: _,
+                    }) = function_call
+                    {
+                        // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
+                        unimplemented!()
+                    }
+                    if finish_reason.is_some() {
+                        // TODO: we might want to return or break from here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
+                        unimplemented!()
                     }
                 }
             }
