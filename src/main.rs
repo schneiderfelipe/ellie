@@ -117,7 +117,7 @@ async fn handle_response(
 
     let mut stdout = tokio::io::stdout();
     let mut buffer = String::new();
-    'outer: while let Some(result) = response.next().await {
+    while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
@@ -142,12 +142,16 @@ async fn handle_response(
                         unimplemented!("function call {name:?} {arguments:?}")
                     }
                     if let Some(finish_reason) = finish_reason {
-                        // TODO: we might want to return instead of breaking, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed.
                         match finish_reason.as_str() {
-                            "stop" | "length" => break 'outer,
+                            "stop" | "length" => {
+                                stdout.write_all(b"\n").await?;
+                                stdout.flush().await?;
+                                stdout.shutdown().await?;
+                                return Ok(buffer);
+                            }
                             "function_call" => unimplemented!("function call"),
+                            // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
                             finish_reason => {
-                                // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
                                 unreachable!("impossible finish reason: {finish_reason}")
                             }
                         }
@@ -156,10 +160,7 @@ async fn handle_response(
             }
         }
     }
-    stdout.write_all(b"\n").await?;
-    stdout.flush().await?;
-    stdout.shutdown().await?;
-    Ok(buffer)
+    unreachable!("no finish reason")
 }
 
 #[tokio::main]
@@ -173,7 +174,6 @@ async fn main() -> anyhow::Result<()> {
     let response = create_response(request).await?;
     let _output = handle_response(response).await?;
 
-    // println!("{output}");
     // TODO: create user/assistant pair, trim output and store
     Ok(())
 }
