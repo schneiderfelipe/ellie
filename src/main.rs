@@ -128,13 +128,16 @@ async fn create_response(mut stream: aot::ChatCompletionResponseStream) -> anyho
                          ..
                      }| match content {
                         None => Ok(()),
-                        Some(ref content) => write!(stdout, "{content}"),
+                        Some(ref content) => {
+                            write!(stdout, "{content}")?;
+                            stdout.flush()
+                        }
                     },
                 )?
             }
         }
     }
-    // stdout.flush()?; // TODO: do I need it? Isn't it flushed at the end?
+    writeln!(stdout)?;
     // TODO: create user/assistant pair, trim response and store
     Ok(String::new())
 }
