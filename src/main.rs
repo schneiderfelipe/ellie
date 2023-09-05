@@ -134,6 +134,7 @@ async fn handle_response(
         }
     }
     stdout.write_all(b"\n").await?;
+    stdout.flush().await?;
     stdout.shutdown().await?;
     Ok(buffer)
 }
