@@ -8,7 +8,7 @@ authors = ["Felipe S. S. Schneider <schneider.felipe.5@gmail.com>"]
 description = "Urban broccoli"
 repository = "https://github.com/schneiderfelipe/ellie"
 documentation = "https://docs.rs/ellie"
-rust-version = "1.56.1"
+rust-version = "1.72.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
