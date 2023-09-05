@@ -1,0 +1,21 @@
+[package]
+name = "ellie"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+authors = ["Felipe S. S. Schneider <schneider.felipe.5@gmail.com>"]
+description = "Urban broccoli"
+repository = "https://github.com/schneiderfelipe/ellie"
+documentation = "https://docs.rs/ellie"
+rust-version = "1.72.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = { default-features = false, version = "1.0.75" }
+async-openai = { default-features = false, version = "0.14.0" }
+futures = { default-features = false, version = "0.3.28" }
+serde_json = { default-features = false, version = "1.0.105" }
+tiktoken-rs = { version = "0.5.3", features = ["async-openai"] }
+tokio = { version = "1.32.0", features = ["io-std", "rt-multi-thread"], default-features = false }
