@@ -48,9 +48,8 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
 /// # Errors
 /// If the created message could not fit the cheapest model alone.
 #[inline]
-fn create_user_message(
-    input: impl Into<String>,
-) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+fn create_user_message(input: &str) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+    let input = input.trim();
     let messages = [aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::User)
         .content(input)
@@ -116,7 +115,7 @@ async fn handle_response(
     use tokio::io::AsyncWriteExt as _;
 
     let mut stdout = tokio::io::stdout();
-    let mut buffer = String::new();
+    let mut content_buffer = String::new();
     while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
@@ -135,7 +134,7 @@ async fn handle_response(
                     if let Some(content) = content {
                         stdout.write_all(content.as_bytes()).await?;
                         stdout.flush().await?;
-                        buffer.write_str(&content)?;
+                        content_buffer.write_str(&content)?;
                     }
                     if let Some(aot::FunctionCallStream { name, arguments }) = function_call {
                         // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
@@ -147,7 +146,7 @@ async fn handle_response(
                                 stdout.write_all(b"\n").await?;
                                 stdout.flush().await?;
                                 stdout.shutdown().await?;
-                                return Ok(buffer);
+                                return Ok(content_buffer.trim().into());
                             }
                             "function_call" => unimplemented!("function call"),
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
@@ -165,15 +164,14 @@ async fn handle_response(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let raw_input = std::io::read_to_string(std::io::stdin().lock())?;
-    let input = raw_input.trim();
-    let message = create_user_message(input)?;
+    let input = std::io::read_to_string(std::io::stdin().lock())?;
+    let message = create_user_message(&input)?;
 
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
     let response = create_response(request).await?;
     let _output = handle_response(response).await?;
 
-    // TODO: create user/assistant pair, trim output and store
+    // TODO: create user/assistant pair, and store
     Ok(())
 }
