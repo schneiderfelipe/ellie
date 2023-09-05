@@ -116,8 +116,8 @@ async fn handle_response(
 
     let mut stdout = tokio::io::stdout();
     let mut content_buffer = String::new();
-    let mut func_call_name = String::new();
-    let mut func_call_arguments_buffer = String::new();
+    let mut function_call_name = String::new();
+    let mut function_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
@@ -140,10 +140,10 @@ async fn handle_response(
                     }
                     if let Some(aot::FunctionCallStream { name, arguments }) = function_call {
                         if let Some(name) = name {
-                            func_call_name = name;
+                            function_call_name = name;
                         }
                         if let Some(arguments) = arguments {
-                            func_call_arguments_buffer.write_str(&arguments)?;
+                            function_call_arguments_buffer.write_str(&arguments)?;
                         }
                     }
                     if let Some(finish_reason) = finish_reason {
@@ -158,13 +158,12 @@ async fn handle_response(
                                     .build()?);
                             }
                             "function_call" => {
+                                let name = function_call_name.trim().into();
+                                let arguments = function_call_arguments_buffer.trim().into();
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
                                     .role(aot::Role::Assistant)
-                                    .function_call(aot::FunctionCall {
-                                        name: func_call_name.trim().into(),
-                                        arguments: func_call_arguments_buffer.trim().into(),
-                                    })
-                                    .build()?)
+                                    .function_call(aot::FunctionCall { name, arguments })
+                                    .build()?);
                             }
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
                             finish_reason => unreachable!("bad finish reason: {finish_reason}"),
@@ -185,7 +184,9 @@ async fn main() -> anyhow::Result<()> {
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
     let response = create_response(request).await?;
-    let _output = handle_response(response).await?;
+    let assistance = handle_response(response).await?;
+
+    println!("{assistance:?}");
 
     // TODO: create user/assistant pair, and store
     Ok(())
