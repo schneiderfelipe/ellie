@@ -1,8 +1,4 @@
-use std::io::Write;
-
-use anyhow::Context;
 use async_openai::types as aot;
-use futures::StreamExt;
 
 /// Temperature used in all requests.
 const TEMPERATURE: f32 = 0.0;
@@ -95,6 +91,8 @@ fn create_chat_messages(
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
 ) -> anyhow::Result<aot::CreateChatCompletionRequest> {
+    use anyhow::Context;
+
     let model = choose_model(&messages).context(
         "no model with large enough context length could be found for the given messages",
     )?;
@@ -117,7 +115,12 @@ async fn create_stream(
 
 #[inline]
 async fn create_response(mut stream: aot::ChatCompletionResponseStream) -> anyhow::Result<String> {
+    use std::{fmt::Write as _, io::Write};
+
+    use futures::StreamExt;
+
     let mut stdout = std::io::stdout().lock();
+    let mut buffer = String::new();
     while let Some(result) = stream.next().await {
         match result {
             Err(err) => anyhow::bail!(err),
@@ -126,20 +129,22 @@ async fn create_response(mut stream: aot::ChatCompletionResponseStream) -> anyho
                     |aot::ChatCompletionResponseStreamMessage {
                          delta: aot::ChatCompletionStreamResponseDelta { content, .. },
                          ..
-                     }| match content {
-                        None => Ok(()),
-                        Some(ref content) => {
+                     }|
+                     -> anyhow::Result<_> {
+                        if let Some(content) = content {
                             write!(stdout, "{content}")?;
-                            stdout.flush()
+                            stdout.flush()?;
+                            write!(buffer, "{content}")?;
                         }
+                        Ok(())
                     },
-                )?
+                )?;
             }
         }
     }
     writeln!(stdout)?;
     // TODO: create user/assistant pair, trim response and store
-    Ok(String::new())
+    Ok(buffer)
 }
 
 #[tokio::main]
@@ -150,6 +155,7 @@ async fn main() -> anyhow::Result<()> {
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
     let stream = create_stream(request).await?;
-    let _response = create_response(stream).await?;
+    let response = create_response(stream).await?;
+    println!("{response}");
     Ok(())
 }
