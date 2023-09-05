@@ -43,16 +43,6 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
-/// Read the whole standard input.
-///
-/// # Errors
-/// If the input contains invalid UTF-8 or any other situation where
-/// [`std::io::read_to_string`] fails.
-#[inline]
-fn read_input() -> std::io::Result<String> {
-    std::io::read_to_string(std::io::stdin().lock())
-}
-
 /// Create a user message for the given input.
 ///
 /// # Errors
@@ -114,7 +104,9 @@ async fn create_response(
 }
 
 #[inline]
-async fn write_output(mut response: aot::ChatCompletionResponseStream) -> anyhow::Result<String> {
+async fn handle_response(
+    mut response: aot::ChatCompletionResponseStream,
+) -> anyhow::Result<String> {
     use std::{fmt::Write as _, io::Write as _};
 
     use futures::StreamExt as _;
@@ -131,6 +123,7 @@ async fn write_output(mut response: aot::ChatCompletionResponseStream) -> anyhow
                          ..
                      }|
                      -> anyhow::Result<_> {
+                        // TODO: we might have a function call here, see <https://community.openai.com/t/function-calls-and-streaming/263393/3?u=schneider.felipe.5> for how to proceed. This will change our return type to an enum.
                         if let Some(content) = content {
                             write!(stdout, "{content}")?;
                             stdout.flush()?;
@@ -148,13 +141,15 @@ async fn write_output(mut response: aot::ChatCompletionResponseStream) -> anyhow
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let raw_input = read_input()?;
+    let raw_input = std::io::read_to_string(std::io::stdin().lock())?;
     let input = raw_input.trim();
     let message = create_user_message(input)?;
+
     let messages = create_chat_messages(message);
     let request = create_request(messages)?;
     let response = create_response(request).await?;
-    let output = write_output(response).await?;
+    let output = handle_response(response).await?;
+
     println!("{output}");
     // TODO: create user/assistant pair, trim output and store
     Ok(())
