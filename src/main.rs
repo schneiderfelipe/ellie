@@ -30,15 +30,6 @@ fn messages_fit_model(
     )
 }
 
-/// Retrieve context messages for the given message.
-#[inline]
-fn retrieve_messages(
-    message: async_openai::types::ChatCompletionRequestMessage,
-) -> Vec<async_openai::types::ChatCompletionRequestMessage> {
-    // TODO: actually get messages
-    vec![message]
-}
-
 /// Find the cheapest model with large enough context length for the given
 /// messages.
 ///
@@ -89,16 +80,24 @@ fn create_user_message(
     Ok(message)
 }
 
+/// Retrieve chat messages for the given message.
+#[inline]
+fn create_chat_messages(
+    message: async_openai::types::ChatCompletionRequestMessage,
+) -> Vec<async_openai::types::ChatCompletionRequestMessage> {
+    // TODO: actually get messages
+    vec![message]
+}
+
 /// Create an `OpenAI` request.
 ///
 /// # Errors
-/// If context messages could not be retrieved or model could not be chosen for
+/// If chat messages could not be retrieved or model could not be chosen for
 /// the given message.
 #[inline]
 fn create_request(
-    message: async_openai::types::ChatCompletionRequestMessage,
+    messages: Vec<async_openai::types::ChatCompletionRequestMessage>,
 ) -> anyhow::Result<async_openai::types::CreateChatCompletionRequest> {
-    let messages = retrieve_messages(message);
     let model = choose_model(&messages)?;
     Ok(
         async_openai::types::CreateChatCompletionRequestArgs::default()
@@ -114,7 +113,8 @@ async fn main() -> anyhow::Result<()> {
     let raw_input = read_input()?;
     let input = raw_input.trim();
     let message = create_user_message(input)?;
-    let request = create_request(message)?;
+    let messages = create_chat_messages(message);
+    let request = create_request(messages)?;
     let _stream = async_openai::Client::new()
         .chat()
         .create_stream(request)
