@@ -1,4 +1,5 @@
 use async_openai::types as aot;
+use color_eyre::eyre;
 
 /// Temperature used in all requests.
 const TEMPERATURE: f32 = 0.0;
@@ -23,9 +24,10 @@ const MODELS: [&str; 4] = [
 fn messages_fit_model(
     model: &str,
     messages: &[aot::ChatCompletionRequestMessage],
-) -> anyhow::Result<bool> {
+) -> eyre::Result<bool> {
     Ok(
-        tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)?
+        tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
+            .map_err(|e| eyre::eyre!(e))?
             >= MIN_COMPLETION_TOKENS,
     )
 }
@@ -48,13 +50,13 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
 /// # Errors
 /// If the created message could not fit the cheapest model alone.
 #[inline]
-fn create_user_message(input: &str) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+fn create_user_message(input: &str) -> eyre::Result<aot::ChatCompletionRequestMessage> {
     let input = input.trim();
     let messages = [aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::User)
         .content(input)
         .build()?];
-    anyhow::ensure!(
+    eyre::ensure!(
         messages_fit_model(MODELS[0], &messages)?,
         "user input should fit {model}",
         model = MODELS[0]
@@ -83,8 +85,8 @@ fn create_chat_messages(
 #[inline]
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
-) -> anyhow::Result<aot::CreateChatCompletionRequest> {
-    use anyhow::Context as _;
+) -> eyre::Result<aot::CreateChatCompletionRequest> {
+    use eyre::ContextCompat as _;
 
     let model = choose_model(&messages).context(
         "no model with large enough context length could be found for the given messages",
@@ -126,7 +128,7 @@ async fn create_response<C: async_openai::config::Config + Sync>(
 #[inline]
 async fn create_assistant_message(
     mut response: aot::ChatCompletionResponseStream,
-) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+) -> eyre::Result<aot::ChatCompletionRequestMessage> {
     use std::fmt::Write as _;
 
     use futures::StreamExt as _;
@@ -138,7 +140,7 @@ async fn create_assistant_message(
     let mut function_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
         match result {
-            Err(err) => anyhow::bail!(err),
+            Err(err) => eyre::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
                 for aot::ChatCompletionResponseStreamMessage {
                     delta:
@@ -152,7 +154,7 @@ async fn create_assistant_message(
                 } in choices
                 {
                     if let Some(role) = role {
-                        anyhow::ensure!(matches!(role, aot::Role::Assistant), "bad role: {role}");
+                        eyre::ensure!(matches!(role, aot::Role::Assistant), "bad role: {role}");
                     }
                     if let Some(content) = content {
                         stdout.write_all(content.as_ref()).await?;
@@ -198,7 +200,9 @@ async fn create_assistant_message(
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
+
     let input = std::io::read_to_string(std::io::stdin().lock())?;
     let user_message = create_user_message(&input)?;
     let mut new_messages = vec![user_message];
@@ -236,7 +240,7 @@ fn try_compact_json(s: impl Into<String>) -> String {
 fn create_function_call_message(
     name: &str,
     _arguments: &str,
-) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
+) -> eyre::Result<aot::ChatCompletionRequestMessage> {
     // TODO: eventually call functions,
     // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
 
@@ -253,7 +257,7 @@ fn create_function_call_message(
 fn update_new_messages(
     new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
     assistant_message: aot::ChatCompletionRequestMessage,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     match assistant_message {
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,
