@@ -46,7 +46,8 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
-/// Trim text and try to produce a compact JSON string out of it,
+/// Trim text
+/// and try to produce a compact JSON string out of it,
 /// returning an owned trimmed string if serialization fails.
 #[inline]
 fn try_compact_json(maybe_json: &str) -> String {
@@ -56,7 +57,34 @@ fn try_compact_json(maybe_json: &str) -> String {
         .unwrap_or_else(|_| maybe_json.into())
 }
 
-/// Call the given function with the given arguments and build a message out of
+#[inline]
+fn create_functions(
+    _messages: &[aot::ChatCompletionRequestMessage],
+) -> eyre::Result<Option<impl Into<Vec<aot::ChatCompletionFunctions>>>> {
+    // TODO: actual function specifications will be retrieved here in the future,
+    // directly from binaries/scripts.
+    Ok(Some([aot::ChatCompletionFunctionsArgs::default()
+        .name("get_current_weather")
+        .description("Get the current weather in a given location")
+        .parameters(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The city and state, e.g. San Francisco, CA",
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                },
+            },
+            "required": ["location"],
+        }))
+        .build()?]))
+}
+
+/// Call the given function with the given arguments
+/// and build a message out of
 /// the returned contents.
 #[inline]
 fn create_function_message(
@@ -64,7 +92,8 @@ fn create_function_message(
     _arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
     // TODO: eventually call functions,
-    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
+    // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
 
     let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
     Ok(aot::ChatCompletionRequestMessageArgs::default()
@@ -102,46 +131,30 @@ fn create_chat_messages(
 ) -> Vec<aot::ChatCompletionRequestMessage> {
     // TODO: actually get previous chat messages,
     // and split/prune to fit the context,
-    // this should
-    // always produce a valid context for at least *one* of the MODELS.
+    // this should always produce a valid context for at least *one* of the MODELS.
+    // Choose some other messages to prepend then?
+    // Choose a suitable system message as well to prepend.
     new_messages.into()
 }
 
 /// Create an `OpenAI` request.
 ///
 /// # Errors
-/// If a model could not be chosen for the given messages.
+/// If a model could not be chosen for the given messages,
+/// or if functions could not be retrieved.
 #[inline]
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
 ) -> eyre::Result<aot::CreateChatCompletionRequest> {
-    let model = choose_model(&messages)
-        .context("choosing model with large enough context length for the given messages")?;
-    Ok(aot::CreateChatCompletionRequestArgs::default()
-        .temperature(TEMPERATURE)
-        .messages(messages)
-        .model(model)
-        // TODO: actual function specifications will be added here in the future,
-        // make a function for retrieval
-        .functions([aot::ChatCompletionFunctionsArgs::default()
-            .name("get_current_weather")
-            .description("Get the current weather in a given location")
-            .parameters(serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "The city and state, e.g. San Francisco, CA",
-                    },
-                    "unit": {
-                        "type": "string",
-                        "enum": ["celsius", "fahrenheit"],
-                    },
-                },
-                "required": ["location"],
-            }))
-            .build()?])
-        .build()?)
+    let mut request = aot::CreateChatCompletionRequestArgs::default();
+    request.temperature(TEMPERATURE).model(
+        choose_model(&messages)
+            .context("choosing model with large enough context length for the given messages")?,
+    );
+    if let Some(functions) = create_functions(&messages)? {
+        request.functions(functions);
+    }
+    Ok(request.messages(messages).build()?)
 }
 
 #[inline]
@@ -301,6 +314,9 @@ async fn main() -> eyre::Result<()> {
     // something fails,
     // nothing is stored,
     // so better store everything at the end.
+    // Also,
+    // store groups of sessions,
+    // which helps debugging in the future.
 
     Ok(())
 }
