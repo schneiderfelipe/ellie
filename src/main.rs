@@ -56,7 +56,8 @@ fn create_user_message(input: &str) -> anyhow::Result<aot::ChatCompletionRequest
         .build()?];
     anyhow::ensure!(
         messages_fit_model(MODELS[0], &messages)?,
-        "user input should fit the cheapest model alone"
+        "user input should fit {model}",
+        model = MODELS[0]
     );
     let [message] = messages;
     Ok(message)
@@ -138,20 +139,24 @@ async fn create_assistant_message(
     let mut function_call_name = String::new();
     let mut function_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
+        log::info!("{result:#?}");
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
                 for aot::ChatCompletionResponseStreamMessage {
                     delta:
                         aot::ChatCompletionStreamResponseDelta {
+                            role,
                             content,
                             function_call,
-                            ..
                         },
                     finish_reason,
                     ..
                 } in choices
                 {
+                    if let Some(role) = role {
+                        anyhow::ensure!(matches!(role, aot::Role::Assistant), "bad role: {role}");
+                    }
                     if let Some(content) = content {
                         stdout.write_all(content.as_ref()).await?;
                         stdout.flush().await?;
@@ -197,18 +202,26 @@ async fn create_assistant_message(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+
     let input = std::io::read_to_string(std::io::stdin().lock())?;
+    log::info!("{input:#?}");
     let user_message = create_user_message(&input)?;
+    log::info!("{user_message:#?}");
     let mut new_messages = vec![user_message];
+    log::info!("{new_messages:#?}");
 
     while !matches!(
         new_messages.iter().last().unwrap().role,
         aot::Role::Assistant
     ) {
         let messages = create_chat_messages(&new_messages);
+        log::info!("{messages:#?}");
         let request = create_request(messages)?;
+        log::info!("{request:#?}");
         let response = create_response(request).await?;
         let assistant_message = create_assistant_message(response).await?;
+        log::info!("{assistant_message:#?}");
 
         update_new_messages(&mut new_messages, assistant_message)?;
     }
