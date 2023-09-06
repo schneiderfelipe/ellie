@@ -94,24 +94,24 @@ fn create_request(
         .messages(messages)
         .model(model)
         // TODO: function specifications will be added in the future here
-        // .functions([aot::ChatCompletionFunctionsArgs::default()
-        //     .name("get_current_weather")
-        //     .description("Get the current weather in a given location")
-        //     .parameters(serde_json::json!({
-        //         "type": "object",
-        //         "properties": {
-        //             "location": {
-        //                 "type": "string",
-        //                 "description": "The city and state, e.g. San Francisco, CA",
-        //             },
-        //             "unit": {
-        //                 "type": "string",
-        //                 "enum": ["celsius", "fahrenheit"],
-        //             },
-        //         },
-        //         "required": ["location"],
-        //     }))
-        //     .build()?])
+        .functions([aot::ChatCompletionFunctionsArgs::default()
+            .name("get_current_weather")
+            .description("Get the current weather in a given location")
+            .parameters(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA",
+                    },
+                    "unit": {
+                        "type": "string",
+                        "enum": ["celsius", "fahrenheit"],
+                    },
+                },
+                "required": ["location"],
+            }))
+            .build()?])
         .build()?)
 }
 
@@ -139,7 +139,7 @@ async fn create_assistant_message(
     let mut function_call_name = String::new();
     let mut function_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
-        log::info!("{result:#?}");
+        tracing::info!("{result:#?}");
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
@@ -202,26 +202,31 @@ async fn create_assistant_message(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    pretty_env_logger::init();
+    use tracing_subscriber::prelude::*;
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let input = std::io::read_to_string(std::io::stdin().lock())?;
-    log::info!("{input:#?}");
+    tracing::info!("{input:#?}");
     let user_message = create_user_message(&input)?;
-    log::info!("{user_message:#?}");
+    tracing::info!("{user_message:#?}");
     let mut new_messages = vec![user_message];
-    log::info!("{new_messages:#?}");
+    tracing::info!("{new_messages:#?}");
 
     while !matches!(
         new_messages.iter().last().unwrap().role,
         aot::Role::Assistant
     ) {
         let messages = create_chat_messages(&new_messages);
-        log::info!("{messages:#?}");
+        tracing::info!("{messages:#?}");
         let request = create_request(messages)?;
-        log::info!("{request:#?}");
+        tracing::info!("{request:#?}");
         let response = create_response(request).await?;
         let assistant_message = create_assistant_message(response).await?;
-        log::info!("{assistant_message:#?}");
+        tracing::info!("{assistant_message:#?}");
 
         update_new_messages(&mut new_messages, assistant_message)?;
     }
