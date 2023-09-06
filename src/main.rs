@@ -93,24 +93,24 @@ fn create_request(
         .messages(messages)
         .model(model)
         // TODO: function specifications will be added in the future here
-        .functions([aot::ChatCompletionFunctionsArgs::default()
-            .name("get_current_weather")
-            .description("Get the current weather in a given location")
-            .parameters(serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "The city and state, e.g. San Francisco, CA",
-                    },
-                    "unit": {
-                        "type": "string",
-                        "enum": ["celsius", "fahrenheit"],
-                    },
-                },
-                "required": ["location"],
-            }))
-            .build()?])
+        // .functions([aot::ChatCompletionFunctionsArgs::default()
+        //     .name("get_current_weather")
+        //     .description("Get the current weather in a given location")
+        //     .parameters(serde_json::json!({
+        //         "type": "object",
+        //         "properties": {
+        //             "location": {
+        //                 "type": "string",
+        //                 "description": "The city and state, e.g. San Francisco, CA",
+        //             },
+        //             "unit": {
+        //                 "type": "string",
+        //                 "enum": ["celsius", "fahrenheit"],
+        //             },
+        //         },
+        //         "required": ["location"],
+        //     }))
+        //     .build()?])
         .build()?)
 }
 
@@ -207,7 +207,6 @@ async fn main() -> anyhow::Result<()> {
     ) {
         let messages = create_chat_messages(&new_messages);
         let request = create_request(messages)?;
-        eprintln!("{request:#?}");
         let response = create_response(request).await?;
         let assistant_message = create_assistant_message(response).await?;
 
