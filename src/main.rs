@@ -120,6 +120,11 @@ async fn create_response<C: async_openai::config::Config + Sync>(
     client: &async_openai::Client<C>,
     request: aot::CreateChatCompletionRequest,
 ) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
+    log::info!(
+        "{request}",
+        request =
+            serde_json::to_string(&request).expect("serialization of requests should never fail")
+    );
     client.chat().create_stream(request).await
 }
 
@@ -199,6 +204,7 @@ async fn create_assistant_message(
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+    pretty_env_logger::init();
     color_eyre::install()?;
 
     let input = std::io::read_to_string(std::io::stdin().lock())?;
