@@ -188,6 +188,7 @@ async fn create_assistant_message(
                                 let arguments = function_call_arguments_buffer.trim().into();
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
                                     .role(aot::Role::Assistant)
+                                    .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
                                     .function_call(aot::FunctionCall { name, arguments })
                                     .build()?);
                             }
@@ -277,7 +278,7 @@ fn update_new_messages(
         } => new_messages.push(assistant_message),
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,
-            content: None,
+            // content: None, // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
             function_call: Some(aot::FunctionCall { name, arguments }),
             ..
         } => {
@@ -287,6 +288,7 @@ fn update_new_messages(
             new_messages.push(
                 aot::ChatCompletionRequestMessageArgs::default()
                     .role(aot::Role::Assistant)
+                    .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
                     .function_call(aot::FunctionCall { name, arguments })
                     .build()?,
             );
