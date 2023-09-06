@@ -46,6 +46,39 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
+#[inline]
+fn try_compact_json(maybe_json: &str) -> String {
+    let maybe_json = maybe_json.trim();
+    serde_json::from_str::<serde_json::Value>(maybe_json)
+        .and_then(|value| serde_json::to_string(&value))
+        .unwrap_or_else(|_| maybe_json.into())
+}
+
+#[inline]
+fn create_function_call(name: &str, arguments: &str) -> aot::FunctionCall {
+    let name = name.trim();
+    aot::FunctionCall {
+        name: name.into(),
+        arguments: try_compact_json(arguments),
+    }
+}
+
+#[inline]
+fn create_function_call_message(
+    name: &str,
+    _arguments: &str,
+) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+    // TODO: eventually call functions,
+    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+
+    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
+    Ok(aot::ChatCompletionRequestMessageArgs::default()
+        .role(aot::Role::Function)
+        .name(name)
+        .content(try_compact_json(content))
+        .build()?)
+}
+
 /// Create a user message for the given input.
 ///
 /// # Errors
@@ -129,23 +162,6 @@ async fn create_response<C: async_openai::config::Config + Sync>(
 }
 
 #[inline]
-fn try_compact_json(maybe_json: &str) -> String {
-    let maybe_json = maybe_json.trim();
-    serde_json::from_str::<serde_json::Value>(maybe_json)
-        .and_then(|value| serde_json::to_string(&value))
-        .unwrap_or_else(|_| maybe_json.into())
-}
-
-#[inline]
-fn create_function_call(name: &str, arguments: &str) -> aot::FunctionCall {
-    let name = name.trim();
-    aot::FunctionCall {
-        name: name.into(),
-        arguments: try_compact_json(arguments),
-    }
-}
-
-#[inline]
 async fn create_assistant_message(
     mut response: aot::ChatCompletionResponseStream,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
@@ -216,22 +232,6 @@ async fn create_assistant_message(
         }
     }
     unreachable!("no finish reason")
-}
-
-#[inline]
-fn create_function_call_message(
-    name: &str,
-    _arguments: &str,
-) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    // TODO: eventually call functions,
-    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
-
-    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
-    Ok(aot::ChatCompletionRequestMessageArgs::default()
-        .role(aot::Role::Function)
-        .name(name)
-        .content(try_compact_json(content))
-        .build()?)
 }
 
 #[inline]
