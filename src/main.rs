@@ -116,13 +116,11 @@ fn create_request(
 }
 
 #[inline]
-async fn create_response(
+async fn create_response<C: async_openai::config::Config + Sync>(
+    client: &async_openai::Client<C>,
     request: aot::CreateChatCompletionRequest,
 ) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
-    async_openai::Client::new()
-        .chat()
-        .create_stream(request)
-        .await
+    client.chat().create_stream(request).await
 }
 
 #[inline]
@@ -139,7 +137,6 @@ async fn create_assistant_message(
     let mut function_call_name = String::new();
     let mut function_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
-        tracing::info!("{result:#?}");
         match result {
             Err(err) => anyhow::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
@@ -202,31 +199,19 @@ async fn create_assistant_message(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use tracing_subscriber::prelude::*;
-
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-
     let input = std::io::read_to_string(std::io::stdin().lock())?;
-    tracing::info!("{input:#?}");
     let user_message = create_user_message(&input)?;
-    tracing::info!("{user_message:#?}");
     let mut new_messages = vec![user_message];
-    tracing::info!("{new_messages:#?}");
 
+    let client = async_openai::Client::new();
     while !matches!(
         new_messages.iter().last().unwrap().role,
         aot::Role::Assistant
     ) {
         let messages = create_chat_messages(&new_messages);
-        tracing::info!("{messages:#?}");
         let request = create_request(messages)?;
-        tracing::info!("{request:#?}");
-        let response = create_response(request).await?;
+        let response = create_response(&client, request).await?;
         let assistant_message = create_assistant_message(response).await?;
-        tracing::info!("{assistant_message:#?}");
 
         update_new_messages(&mut new_messages, assistant_message)?;
     }
@@ -255,7 +240,7 @@ fn create_function_call_message(
     // TODO: eventually call functions,
     // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
 
-    let content = r#"{ "temperature": 22, "unit": "celsius", "description": "Sunny" }"#;
+    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
     let content = try_compact_json(content);
     Ok(aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
