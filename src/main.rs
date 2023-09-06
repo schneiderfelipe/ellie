@@ -93,7 +93,7 @@ fn create_request(
         .temperature(TEMPERATURE)
         .messages(messages)
         .model(model)
-        // TODO: function specifications will be added in the future here
+        // TODO: actual function specifications will be added in the future here
         .functions([aot::ChatCompletionFunctionsArgs::default()
             .name("get_current_weather")
             .description("Get the current weather in a given location")
@@ -126,6 +126,23 @@ async fn create_response<C: async_openai::config::Config + Sync>(
             serde_json::to_string(&request).expect("serialization of requests should never fail")
     );
     client.chat().create_stream(request).await
+}
+
+#[inline]
+fn try_compact_json(maybe_json: &str) -> String {
+    let maybe_json = maybe_json.trim();
+    serde_json::from_str::<serde_json::Value>(maybe_json)
+        .and_then(|value| serde_json::to_string(&value))
+        .unwrap_or_else(|_| maybe_json.into())
+}
+
+#[inline]
+fn create_function_call(name: &str, arguments: &str) -> aot::FunctionCall {
+    let name = name.trim();
+    aot::FunctionCall {
+        name: name.into(),
+        arguments: try_compact_json(arguments),
+    }
 }
 
 #[inline]
@@ -184,12 +201,10 @@ async fn create_assistant_message(
                                     .build()?);
                             }
                             "function_call" => {
-                                let name = function_call_name.trim().into();
-                                let arguments = function_call_arguments_buffer.trim().into();
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
                                     .role(aot::Role::Assistant)
                                     .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
-                                    .function_call(aot::FunctionCall { name, arguments })
+                                    .function_call(create_function_call(&function_call_name, &function_call_arguments_buffer))
                                     .build()?);
                             }
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
@@ -201,6 +216,59 @@ async fn create_assistant_message(
         }
     }
     unreachable!("no finish reason")
+}
+
+#[inline]
+fn create_function_call_message(
+    name: &str,
+    _arguments: &str,
+) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+    // TODO: eventually call functions,
+    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
+
+    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
+    Ok(aot::ChatCompletionRequestMessageArgs::default()
+        .role(aot::Role::Function)
+        .name(name)
+        .content(try_compact_json(content))
+        .build()?)
+}
+
+#[inline]
+fn update_new_messages(
+    new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
+    assistant_message: aot::ChatCompletionRequestMessage,
+) -> eyre::Result<()> {
+    match assistant_message {
+        aot::ChatCompletionRequestMessage {
+            role: aot::Role::Assistant,
+            name: None,
+            content: Some(_),
+            function_call: None,
+        } => new_messages.push(assistant_message),
+        aot::ChatCompletionRequestMessage {
+            role: aot::Role::Assistant,
+            name: None,
+            ref content,
+            function_call:
+                Some(aot::FunctionCall {
+                    ref name,
+                    ref arguments,
+                }),
+        } if content.is_none()
+            || content
+                .as_ref()
+                // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
+                .is_some_and(|content| content.trim().is_empty()) =>
+        {
+            let function_call_message = create_function_call_message(name, arguments)?;
+            new_messages.push(assistant_message);
+            new_messages.push(function_call_message);
+        }
+        assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -235,67 +303,6 @@ async fn main() -> eyre::Result<()> {
     // something fails,
     // nothing is stored,
     // so better store everything at the end.
-
-    Ok(())
-}
-
-#[inline]
-fn try_compact_json(s: impl Into<String>) -> String {
-    let s = s.into();
-    serde_json::from_str::<serde_json::Value>(&s)
-        .and_then(|value| serde_json::to_string(&value))
-        .unwrap_or(s)
-}
-
-#[inline]
-fn create_function_call_message(
-    name: &str,
-    _arguments: &str,
-) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    // TODO: eventually call functions,
-    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
-
-    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
-    let content = try_compact_json(content);
-    Ok(aot::ChatCompletionRequestMessageArgs::default()
-        .role(aot::Role::Function)
-        .name(name)
-        .content(content)
-        .build()?)
-}
-
-#[inline]
-fn update_new_messages(
-    new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
-    assistant_message: aot::ChatCompletionRequestMessage,
-) -> eyre::Result<()> {
-    match assistant_message {
-        aot::ChatCompletionRequestMessage {
-            role: aot::Role::Assistant,
-            content: Some(_),
-            function_call: None,
-            ..
-        } => new_messages.push(assistant_message),
-        aot::ChatCompletionRequestMessage {
-            role: aot::Role::Assistant,
-            // content: None, // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
-            function_call: Some(aot::FunctionCall { name, arguments }),
-            ..
-        } => {
-            let arguments = try_compact_json(arguments);
-            let function_call_message = create_function_call_message(&name, &arguments)?;
-
-            new_messages.push(
-                aot::ChatCompletionRequestMessageArgs::default()
-                    .role(aot::Role::Assistant)
-                    .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
-                    .function_call(aot::FunctionCall { name, arguments })
-                    .build()?,
-            );
-            new_messages.push(function_call_message);
-        }
-        assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
-    }
 
     Ok(())
 }
