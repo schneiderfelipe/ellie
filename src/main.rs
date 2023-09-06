@@ -46,6 +46,8 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
+/// Trim text and try to produce a compact JSON string out of it,
+/// returning an owned trimmed string if serialization fails.
 #[inline]
 fn try_compact_json(maybe_json: &str) -> String {
     let maybe_json = maybe_json.trim();
@@ -54,17 +56,10 @@ fn try_compact_json(maybe_json: &str) -> String {
         .unwrap_or_else(|_| maybe_json.into())
 }
 
+/// Call the given function with the given arguments and build a message out of
+/// the returned contents.
 #[inline]
-fn create_function_call(name: &str, arguments: &str) -> aot::FunctionCall {
-    let name = name.trim();
-    aot::FunctionCall {
-        name: name.into(),
-        arguments: try_compact_json(arguments),
-    }
-}
-
-#[inline]
-fn create_function_call_message(
+fn create_function_message(
     name: &str,
     _arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
@@ -126,7 +121,8 @@ fn create_request(
         .temperature(TEMPERATURE)
         .messages(messages)
         .model(model)
-        // TODO: actual function specifications will be added in the future here
+        // TODO: actual function specifications will be added here in the future,
+        // make a function for retrieval
         .functions([aot::ChatCompletionFunctionsArgs::default()
             .name("get_current_weather")
             .description("Get the current weather in a given location")
@@ -172,8 +168,8 @@ async fn create_assistant_message(
 
     let mut stdout = tokio::io::stdout();
     let mut content_buffer = String::new();
-    let mut function_call_name = String::new();
-    let mut function_call_arguments_buffer = String::new();
+    let mut function_name = String::new();
+    let mut function_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
         match result.context("receiving response chunk") {
             Err(err) => eyre::bail!(err),
@@ -199,10 +195,10 @@ async fn create_assistant_message(
                     }
                     if let Some(aot::FunctionCallStream { name, arguments }) = function_call {
                         if let Some(name) = name {
-                            function_call_name = name;
+                            function_name = name;
                         }
                         if let Some(arguments) = arguments {
-                            function_call_arguments_buffer.write_str(&arguments)?;
+                            function_arguments_buffer.write_str(&arguments)?;
                         }
                     }
                     if let Some(finish_reason) = finish_reason {
@@ -217,10 +213,12 @@ async fn create_assistant_message(
                                     .build()?);
                             }
                             "function_call" => {
+                                let name = function_name.trim().into();
+                                let arguments = try_compact_json(&function_arguments_buffer);
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
                                     .role(aot::Role::Assistant)
                                     .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
-                                    .function_call(create_function_call(&function_call_name, &function_call_arguments_buffer))
+                                    .function_call(aot::FunctionCall { name, arguments })
                                     .build()?);
                             }
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
@@ -261,9 +259,9 @@ fn update_new_messages(
                 // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
                 .is_some_and(|content| content.trim().is_empty()) =>
         {
-            let function_call_message = create_function_call_message(name, arguments)?;
+            let function_message = create_function_message(name, arguments)?;
             new_messages.push(assistant_message);
-            new_messages.push(function_call_message);
+            new_messages.push(function_message);
         }
         assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
     }
