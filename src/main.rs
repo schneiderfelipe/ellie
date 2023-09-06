@@ -93,21 +93,24 @@ fn create_request(
         .messages(messages)
         .model(model)
         // TODO: function specifications will be added in the future here
-        // .functions([aot::ChatCompletionFunctionsArgs::default()
-        //     .name("get_current_weather")
-        //     .description("Get the current weather in a given location")
-        //     .parameters(serde_json::json!({
-        //         "type": "object",
-        //         "properties": {
-        //             "location": {
-        //                 "type": "string",
-        //                 "description": "The city and state, e.g. San Francisco, CA",
-        //             },
-        //             "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
-        //         },
-        //         "required": ["location"],
-        //     }))
-        //     .build()?])
+        .functions([aot::ChatCompletionFunctionsArgs::default()
+            .name("get_current_weather")
+            .description("Get the current weather in a given location")
+            .parameters(serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA",
+                    },
+                    "unit": {
+                        "type": "string",
+                        "enum": ["celsius", "fahrenheit"],
+                    },
+                },
+                "required": ["location"],
+            }))
+            .build()?])
         .build()?)
 }
 
@@ -198,14 +201,18 @@ async fn main() -> anyhow::Result<()> {
     let user_message = create_user_message(&input)?;
     let mut new_messages = vec![user_message];
 
-    let messages = create_chat_messages(&new_messages);
-    let request = create_request(messages)?;
-    let response = create_response(request).await?;
-    let assistant_message = create_assistant_message(response).await?;
+    while !matches!(
+        new_messages.iter().last().unwrap().role,
+        aot::Role::Assistant
+    ) {
+        let messages = create_chat_messages(&new_messages);
+        let request = create_request(messages)?;
+        eprintln!("{request:#?}");
+        let response = create_response(request).await?;
+        let assistant_message = create_assistant_message(response).await?;
 
-    update_new_messages(&mut new_messages, assistant_message)?;
-
-    // TODO: loop until we get a standard assistant response
+        update_new_messages(&mut new_messages, assistant_message)?;
+    }
 
     // TODO: store new messages with atomicity guarantees: if
     // something fails,
@@ -216,13 +223,28 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[inline]
+fn try_compact_json(s: impl Into<String>) -> String {
+    let s = s.into();
+    serde_json::from_str::<serde_json::Value>(&s)
+        .and_then(|value| serde_json::to_string(&value))
+        .unwrap_or(s)
+}
+
+#[inline]
 fn create_function_call_message(
-    _name: &str,
+    name: &str,
     _arguments: &str,
-) -> std::io::Result<aot::ChatCompletionRequestMessage> {
+) -> anyhow::Result<aot::ChatCompletionRequestMessage> {
     // TODO: eventually call functions,
     // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67> and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>
-    unimplemented!()
+
+    let content = r#"{ "temperature": 22, "unit": "celsius", "description": "Sunny" }"#;
+    let content = try_compact_json(content);
+    Ok(aot::ChatCompletionRequestMessageArgs::default()
+        .role(aot::Role::Function)
+        .name(name)
+        .content(content)
+        .build()?)
 }
 
 #[inline]
@@ -243,9 +265,7 @@ fn update_new_messages(
             function_call: Some(aot::FunctionCall { name, arguments }),
             ..
         } => {
-            let arguments = serde_json::from_str::<serde_json::Value>(&arguments)
-                .and_then(|value| serde_json::to_string(&value))
-                .unwrap_or(arguments);
+            let arguments = try_compact_json(arguments);
             let function_call_message = create_function_call_message(&name, &arguments)?;
 
             new_messages.push(
