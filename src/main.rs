@@ -89,11 +89,12 @@ fn create_functions(
 #[inline]
 fn create_function_message(
     name: &str,
-    _arguments: &str,
+    arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
     // TODO: eventually call functions,
     // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
     // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
+    log::info!("{name} {arguments}");
 
     let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
     Ok(aot::ChatCompletionRequestMessageArgs::default()
@@ -162,7 +163,7 @@ async fn create_response<C: async_openai::config::Config + Sync>(
     client: &async_openai::Client<C>,
     request: aot::CreateChatCompletionRequest,
 ) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
-    log::info!(
+    log::debug!(
         "{request}",
         request =
             serde_json::to_string(&request).expect("serialization of requests should never fail")
@@ -291,6 +292,10 @@ async fn main() -> eyre::Result<()> {
     let user_message = create_user_message(&input)?;
     let mut new_messages = vec![user_message];
 
+    // TODO: timeout,
+    // backoff,
+    // etc.
+    // Just to avoid hanging.
     let client = async_openai::Client::new();
     while !matches!(
         new_messages
