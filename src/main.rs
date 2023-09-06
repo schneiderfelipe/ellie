@@ -1,5 +1,6 @@
 use async_openai::types as aot;
 use color_eyre::eyre;
+use eyre::{Context as _, ContextCompat as _};
 
 /// Temperature used in all requests.
 const TEMPERATURE: f32 = 0.0;
@@ -86,11 +87,8 @@ fn create_chat_messages(
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
 ) -> eyre::Result<aot::CreateChatCompletionRequest> {
-    use eyre::ContextCompat as _;
-
-    let model = choose_model(&messages).context(
-        "no model with large enough context length could be found for the given messages",
-    )?;
+    let model = choose_model(&messages)
+        .context("choosing model with large enough context length for the given messages")?;
     Ok(aot::CreateChatCompletionRequestArgs::default()
         .temperature(TEMPERATURE)
         .messages(messages)
@@ -139,7 +137,7 @@ async fn create_assistant_message(
     let mut function_call_name = String::new();
     let mut function_call_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
-        match result {
+        match result.context("receiving response chunk") {
             Err(err) => eyre::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
                 for aot::ChatCompletionResponseStreamMessage {
@@ -209,13 +207,19 @@ async fn main() -> eyre::Result<()> {
 
     let client = async_openai::Client::new();
     while !matches!(
-        new_messages.iter().last().unwrap().role,
+        new_messages
+            .iter()
+            .last()
+            .expect("there should always be at least one new message")
+            .role,
         aot::Role::Assistant
     ) {
         let messages = create_chat_messages(&new_messages);
         let request = create_request(messages)?;
         let response = create_response(&client, request).await?;
-        let assistant_message = create_assistant_message(response).await?;
+        let assistant_message = create_assistant_message(response)
+            .await
+            .context("creating assistant message")?;
 
         update_new_messages(&mut new_messages, assistant_message)?;
     }
