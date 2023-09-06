@@ -13,12 +13,12 @@ rust-version = "1.72.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { default-features = false, version = "1.0.75" }
-async-openai = { default-features = false, version = "0.14.0" }
-futures = { default-features = false, version = "0.3.28" }
+anyhow = { version = "1.0.75" }
+async-openai = { version = "0.14.0" }
+futures = { version = "0.3.28" }
 log = "0.4.20"
-serde_json = { default-features = false, version = "1.0.105" }
+serde_json = { version = "1.0.105" }
 tiktoken-rs = { version = "0.5.3", features = ["async-openai"] }
-tokio = { version = "1.32.0", features = ["io-std", "rt-multi-thread"], default-features = false }
+tokio = { version = "1.32.0", features = ["io-std", "rt-multi-thread"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
