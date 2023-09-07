@@ -69,22 +69,58 @@ struct Provider {
     args: Vec<String>,
 }
 
+impl From<Functions> for Vec<aot::ChatCompletionFunctions> {
+    #[inline]
+    fn from(val: Functions) -> Self {
+        val.function
+    }
+}
+
 impl Functions {
     #[inline]
     fn load() -> eyre::Result<Self> {
-        // TODO: actual function specifications will be optionally retrieved directly
-        // from binaries/scripts in the future. There will be a way of overriding
-        // what the binary/script says using the configuration file, so that the
-        // configuration file is mostly clean most of the time.
         let functions = std::fs::read_to_string("functions.toml")?;
         let functions = toml::from_str(&functions)?;
+
+        // TODO: actual function specifications will be optionally retrieved directly
+        // from binaries/scripts in the future.
+        // There will be a way of overriding
+        // what the binary/script says using the configuration file,
+        // so that the
+        // configuration file is mostly clean most of the time.
+        // TODO: make sure there is a provider for each function,
+        // i.e.,
+        // provider.len() >= function.len()
+
         Ok(functions)
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.provider.is_empty()
     }
 
     #[inline]
     fn prune(self, _messages: &[aot::ChatCompletionRequestMessage]) -> eyre::Result<Self> {
         // TODO: actually choose relevant functions based on the chat messages.
         Ok(self)
+    }
+
+    #[inline]
+    fn call(&self, name: &str, arguments: &str) -> eyre::Result<String> {
+        let provider = self
+            .provider
+            .iter()
+            .find(|provider| provider.name == name)
+            .context("getting function provider")?;
+
+        // TODO: see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
+        // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
+        let content = duct::cmd(&provider.command, &provider.args)
+            .stdin_bytes(arguments)
+            .read()?;
+
+        Ok(try_compact_json(&content))
     }
 }
 
@@ -96,19 +132,7 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let provider = Functions::load()?
-        .provider
-        .into_iter()
-        .find(|provider| provider.name == name)
-        .context("getting function provider")?;
-
-    // TODO: see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
-    // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
-    let content = duct::cmd(provider.command, provider.args)
-        .stdin_bytes(arguments)
-        .read()?;
-    let content = try_compact_json(&content);
-
+    let content = Functions::load()?.call(name, arguments)?;
     log::info!("{name}({arguments}) = {content}");
     Ok(aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
@@ -165,7 +189,7 @@ fn create_request(
         choose_model(&messages)
             .context("choosing model with large enough context length for the given messages")?,
     );
-    let functions = Functions::load()?.prune(&messages)?.function;
+    let functions = Functions::load()?.prune(&messages)?;
     if !functions.is_empty() {
         request.functions(functions);
     }
