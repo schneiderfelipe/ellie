@@ -60,7 +60,7 @@ fn try_compact_json(maybe_json: &str) -> String {
 #[inline]
 fn create_functions(
     _messages: &[aot::ChatCompletionRequestMessage],
-) -> eyre::Result<Option<impl Into<Vec<aot::ChatCompletionFunctions>>>> {
+) -> eyre::Result<Vec<aot::ChatCompletionFunctions>> {
     #[derive(Debug, serde::Deserialize)]
     struct Config {
         function: Vec<aot::ChatCompletionFunctions>,
@@ -79,26 +79,8 @@ fn create_functions(
 
     // TODO: actual function specifications will be retrieved here in the future,
     // directly from binaries/scripts.
-    let functions = [aot::ChatCompletionFunctionsArgs::default()
-        .name("get_current_weather")
-        .description("Get the current weather in a given location")
-        .parameters(serde_json::json!({
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "The city and state, e.g. San Francisco, CA",
-                },
-                "unit": {
-                    "type": "string",
-                    "enum": ["celsius", "fahrenheit"],
-                },
-            },
-            "required": ["location"],
-        }))
-        .build()?];
-    assert_eq!(table.function, functions);
-    Ok(Some(functions))
+
+    Ok(table.function)
 }
 
 /// Call the given function with the given arguments
@@ -170,7 +152,8 @@ fn create_request(
         choose_model(&messages)
             .context("choosing model with large enough context length for the given messages")?,
     );
-    if let Some(functions) = create_functions(&messages)? {
+    let functions = create_functions(&messages)?;
+    if !functions.is_empty() {
         request.functions(functions);
     }
     Ok(request.messages(messages).build()?)
