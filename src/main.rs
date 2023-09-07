@@ -69,15 +69,23 @@ struct Provider {
     args: Vec<String>,
 }
 
-#[inline]
-fn create_functions(_messages: &[aot::ChatCompletionRequestMessage]) -> eyre::Result<Functions> {
-    // TODO: actual function specifications will be optionally retrieved directly
-    // from binaries/scripts in the future. There will be a way of overriding
-    // what the binary/script says using the configuration file, so that the
-    // configuration file is mostly clean most of the time.
-    let functions = std::fs::read_to_string("functions.toml")?;
-    let functions = toml::from_str(&functions)?;
-    Ok(functions)
+impl Functions {
+    #[inline]
+    fn load() -> eyre::Result<Self> {
+        // TODO: actual function specifications will be optionally retrieved directly
+        // from binaries/scripts in the future. There will be a way of overriding
+        // what the binary/script says using the configuration file, so that the
+        // configuration file is mostly clean most of the time.
+        let functions = std::fs::read_to_string("functions.toml")?;
+        let functions = toml::from_str(&functions)?;
+        Ok(functions)
+    }
+
+    #[inline]
+    fn prune(self, _messages: &[aot::ChatCompletionRequestMessage]) -> eyre::Result<Self> {
+        // TODO: actually choose relevant functions based on the chat messages.
+        Ok(self)
+    }
 }
 
 /// Call the given function with the given arguments
@@ -88,7 +96,7 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let provider = create_functions(&[])?
+    let provider = Functions::load()?
         .provider
         .into_iter()
         .find(|provider| provider.name == name)
@@ -157,7 +165,7 @@ fn create_request(
         choose_model(&messages)
             .context("choosing model with large enough context length for the given messages")?,
     );
-    let functions = create_functions(&messages)?.function;
+    let functions = Functions::load()?.prune(&messages)?.function;
     if !functions.is_empty() {
         request.functions(functions);
     }
