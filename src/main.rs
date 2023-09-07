@@ -61,9 +61,25 @@ fn try_compact_json(maybe_json: &str) -> String {
 fn create_functions(
     _messages: &[aot::ChatCompletionRequestMessage],
 ) -> eyre::Result<Option<impl Into<Vec<aot::ChatCompletionFunctions>>>> {
+    #[derive(Debug, serde::Deserialize)]
+    struct Config {
+        function: Vec<aot::ChatCompletionFunctions>,
+        provider: Vec<Provider>,
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct Provider {
+        name: String,
+        command: String,
+        args: Vec<String>,
+    }
+
+    let table = std::fs::read_to_string("functions.toml")?;
+    let table: Config = toml::from_str(&table)?;
+
     // TODO: actual function specifications will be retrieved here in the future,
     // directly from binaries/scripts.
-    Ok(Some([aot::ChatCompletionFunctionsArgs::default()
+    let functions = [aot::ChatCompletionFunctionsArgs::default()
         .name("get_current_weather")
         .description("Get the current weather in a given location")
         .parameters(serde_json::json!({
@@ -80,7 +96,9 @@ fn create_functions(
             },
             "required": ["location"],
         }))
-        .build()?]))
+        .build()?];
+    assert_eq!(table.function, functions);
+    Ok(Some(functions))
 }
 
 /// Call the given function with the given arguments

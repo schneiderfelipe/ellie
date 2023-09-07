@@ -10,6 +10,7 @@ required = ["location"]
 location = { type = "string", description = "The city and state, e.g. San Francisco, CA" }
 unit = { type = "string", enum = ["celsius", "fahrenheit"] }
 
-[function.provider]
+[[provider]]
+name = "get_current_weather"
 command = "weather"
 args = ["current"]
