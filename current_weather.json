@@ -1,0 +1,9 @@
+{
+  "location": "Boston, MA",
+  "temperature": "72",
+  "unit": null,
+  "forecast": [
+    "sunny",
+    "windy"
+  ]
+}

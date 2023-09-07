@@ -57,31 +57,27 @@ fn try_compact_json(maybe_json: &str) -> String {
         .unwrap_or_else(|_| maybe_json.into())
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct Functions {
+    function: Vec<aot::ChatCompletionFunctions>,
+    provider: Vec<Provider>,
+}
+#[derive(Debug, serde::Deserialize)]
+struct Provider {
+    name: String,
+    command: String,
+    args: Vec<String>,
+}
+
 #[inline]
-fn create_functions(
-    _messages: &[aot::ChatCompletionRequestMessage],
-) -> eyre::Result<Vec<aot::ChatCompletionFunctions>> {
-    // TODO: actual function specifications will be optionally retrieved directly from binaries/scripts in the future.
-    // There will be a way of overriding what the binary/script says using the configuration file,
-    // so that the configuration file is mostly clean most of the time.
-
-    #[derive(Debug, serde::Deserialize)]
-    struct Config {
-        function: Vec<aot::ChatCompletionFunctions>,
-        provider: Vec<Provider>,
-    }
-
-    #[derive(Debug, serde::Deserialize)]
-    struct Provider {
-        name: String,
-        command: String,
-        args: Vec<String>,
-    }
-
-    let config = std::fs::read_to_string("functions.toml")?;
-    let config: Config = toml::from_str(&config)?;
-
-    Ok(config.function)
+fn create_functions(_messages: &[aot::ChatCompletionRequestMessage]) -> eyre::Result<Functions> {
+    // TODO: actual function specifications will be optionally retrieved directly
+    // from binaries/scripts in the future. There will be a way of overriding
+    // what the binary/script says using the configuration file, so that the
+    // configuration file is mostly clean most of the time.
+    let functions = std::fs::read_to_string("functions.toml")?;
+    let functions = toml::from_str(&functions)?;
+    Ok(functions)
 }
 
 /// Call the given function with the given arguments
@@ -92,16 +88,24 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    // TODO: eventually call functions,
-    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
-    // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
-    log::info!("{name} {arguments}");
+    let provider = create_functions(&[])?
+        .provider
+        .into_iter()
+        .find(|provider| provider.name == name)
+        .context("getting function provider")?;
 
-    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
+    // TODO: see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
+    // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
+    let content = duct::cmd(provider.command, provider.args)
+        .stdin_bytes(arguments)
+        .read()?;
+    let content = try_compact_json(&content);
+
+    log::info!("{name}({arguments}) = {content}");
     Ok(aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
         .name(name)
-        .content(try_compact_json(content))
+        .content(content)
         .build()?)
 }
 
@@ -153,7 +157,7 @@ fn create_request(
         choose_model(&messages)
             .context("choosing model with large enough context length for the given messages")?,
     );
-    let functions = create_functions(&messages)?;
+    let functions = create_functions(&messages)?.function;
     if !functions.is_empty() {
         request.functions(functions);
     }
