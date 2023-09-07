@@ -61,6 +61,10 @@ fn try_compact_json(maybe_json: &str) -> String {
 fn create_functions(
     _messages: &[aot::ChatCompletionRequestMessage],
 ) -> eyre::Result<Vec<aot::ChatCompletionFunctions>> {
+    // TODO: actual function specifications will be optionally retrieved directly from binaries/scripts in the future.
+    // There will be a way of overriding what the binary/script says using the configuration file,
+    // so that the configuration file is mostly clean most of the time.
+
     #[derive(Debug, serde::Deserialize)]
     struct Config {
         function: Vec<aot::ChatCompletionFunctions>,
@@ -74,13 +78,10 @@ fn create_functions(
         args: Vec<String>,
     }
 
-    let table = std::fs::read_to_string("functions.toml")?;
-    let table: Config = toml::from_str(&table)?;
+    let config = std::fs::read_to_string("functions.toml")?;
+    let config: Config = toml::from_str(&config)?;
 
-    // TODO: actual function specifications will be retrieved here in the future,
-    // directly from binaries/scripts.
-
-    Ok(table.function)
+    Ok(config.function)
 }
 
 /// Call the given function with the given arguments
