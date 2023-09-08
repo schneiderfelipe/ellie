@@ -8,9 +8,11 @@ unit = { enum = ["fahrenheit"] } # override unit
 name = "get_current_weather"
 command = "python"
 args = ["-c", """
-import sys, subprocess
-if len(sys.argv[1:]) == 0:
-    subprocess.call(['cat', 'current_weather.json'])
-else:
-    subprocess.call(['cat', 'current_weather_specification.json'])
+from sys import argv
+from subprocess import call
+match argv[1:]:  # ignore "-c"
+    case ["specification"]:
+        call(["cat", "current_weather_specification.json"])
+    case []:
+        call(["cat", "current_weather.json"])
 """]
