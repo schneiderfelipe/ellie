@@ -12,5 +12,8 @@ unit = { type = "string", enum = ["celsius", "fahrenheit"] }
 
 [[provider]]
 name = "get_current_weather"
-command = "cat"
-args = ["current_weather.json"]
+command = "python"
+args = [
+  "-c",
+  "import sys, subprocess; args = sys.argv[1:]; subprocess.call(['cat', 'current_weather.json']) if len(args) == 0 else subprocess.call(['cat', 'current_weather_specification.json'])",
+]
