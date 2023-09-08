@@ -7,12 +7,4 @@ unit = { enum = ["fahrenheit"] } # override unit
 [[provider]]
 name = "get_current_weather"
 command = "python"
-args = ["-c", """
-from sys import argv
-from subprocess import call
-match argv[1:]:  # ignore "-c"
-    case ["specification"]:
-        call(["cat", "current_weather_specification.json"])
-    case []:
-        call(["cat", "current_weather.json"])
-"""]
+args = ["get_current_weather.py"]
