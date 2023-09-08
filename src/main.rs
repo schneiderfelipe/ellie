@@ -31,7 +31,7 @@ fn messages_fit_model(
 ) -> eyre::Result<bool> {
     Ok(
         tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
-            .map_err(|e| eyre::eyre!(e))?
+            .map_err(|err| eyre::eyre!(err))?
             >= MIN_COMPLETION_TOKENS,
     )
 }

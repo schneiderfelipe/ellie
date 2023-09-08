@@ -50,31 +50,18 @@ impl Functions {
         // TODO: alternatively,
         // simply ignore functions without providers and give a warning.
 
-        for Provider {
-            name,
-            command,
-            args,
-        } in &provider
-        {
-            let original = duct::cmd(
-                command,
-                args.iter()
-                    .map(std::convert::AsRef::as_ref)
-                    .chain(std::iter::once("specification")),
-            )
-            .read()?;
-
+        // TODO: calculate specifications on demand
+        for provider in &provider {
             let aot::ChatCompletionFunctions {
-                name: mut actual_name,
+                name: actual_name,
                 description: mut actual_description,
                 parameters: mut actual_parameters,
-            } = serde_json::from_str(&original)?;
+            } = provider.specification()?;
 
-            if actual_name != *name {
-                log::warn!("{actual_name} != {name}");
-                actual_name = name.clone();
-            }
-            if let Some(index) = function.iter().position(|f| f.name == actual_name) {
+            if let Some(index) = function
+                .iter()
+                .position(|function| function.name == actual_name)
+            {
                 let aot::ChatCompletionFunctions {
                     name: _,
                     description,
@@ -140,7 +127,26 @@ impl Provider {
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()?;
-
         Ok(try_compact_json(&content))
+    }
+
+    #[inline]
+    fn specification(&self) -> eyre::Result<aot::ChatCompletionFunctions> {
+        let specification = duct::cmd(
+            &self.command,
+            self.args
+                .iter()
+                .map(AsRef::as_ref)
+                .chain(std::iter::once("specification")),
+        )
+        .read()?;
+
+        let mut specification: aot::ChatCompletionFunctions = serde_json::from_str(&specification)?;
+        if specification.name != self.name {
+            log::warn!("{} != {}", self.name, specification.name);
+            specification.name = self.name.clone();
+        }
+
+        Ok(specification)
     }
 }
