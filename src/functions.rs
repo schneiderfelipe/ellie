@@ -112,6 +112,8 @@ impl Functions {
         _messages: &[aot::ChatCompletionRequestMessage],
     ) -> eyre::Result<Self> {
         // TODO: actually choose relevant functions based on the chat messages.
+        // This might become a separate function on specifications alone,
+        // who knows.
         Ok(self)
     }
 
@@ -122,15 +124,20 @@ impl Functions {
 
     #[inline]
     pub(super) fn call(&self, name: &str, arguments: &str) -> eyre::Result<String> {
-        let provider = self
-            .provider
+        self.provider
             .iter()
             .find(|provider| provider.name == name)
-            .context("getting function provider")?;
+            .context("getting function provider")?
+            .call(arguments)
+    }
+}
 
+impl Provider {
+    #[inline]
+    fn call(&self, arguments: &str) -> eyre::Result<String> {
         // TODO: see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
         // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
-        let content = duct::cmd(&provider.command, &provider.args)
+        let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()?;
 
