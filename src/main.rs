@@ -56,7 +56,8 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let content = functions::Functions::load()?
+    let content = functions::Functions::load()
+        .unwrap_or_default()
         .get_provider(name)
         .context("getting function provider")?
         .call(arguments)?;
@@ -126,7 +127,8 @@ fn create_request(
     request.model(model);
 
     // TODO: choose relevant functions based on the chat messages before collecting.
-    let functions = functions::Functions::load()?
+    let functions = functions::Functions::load()
+        .unwrap_or_default()
         .specifications()
         .collect::<Result<Vec<_>, _>>()?;
     if !functions.is_empty() {

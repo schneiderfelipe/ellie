@@ -74,7 +74,7 @@ impl Provider {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 pub struct Functions {
     #[serde(default)]
     provider: Vec<Provider>,
