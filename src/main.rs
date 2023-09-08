@@ -59,6 +59,7 @@ fn create_function_message(
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
     let content = Functions::load()?.call(name, arguments)?;
     log::info!("{name}({arguments}) = {content}");
+
     Ok(aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
         .name(name)
@@ -110,10 +111,13 @@ fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
 ) -> eyre::Result<aot::CreateChatCompletionRequest> {
     let mut request = aot::CreateChatCompletionRequestArgs::default();
-    request.temperature(TEMPERATURE).model(
-        choose_model(&messages)
-            .context("choosing model with large enough context length for the given messages")?,
-    );
+    request.temperature(TEMPERATURE);
+
+    let model = choose_model(&messages)
+        .context("choosing model with large enough context length for the given messages")?;
+    log::info!("{model}");
+    request.model(model);
+
     let functions = Functions::load()?.prune(&messages)?;
     if !functions.is_empty() {
         request.functions(functions);
