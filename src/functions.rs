@@ -49,6 +49,7 @@ impl Provider {
         // TODO: in the future we might accept multiple json objects and select based on
         // messages.
         // Kind of tricky though.
+        // Selection may happen in src/main.rs so return some kind of iterator?
         Ok(try_compact_json(&content))
     }
 
@@ -84,10 +85,15 @@ pub struct Functions {
 impl Functions {
     #[inline]
     pub(super) fn load() -> eyre::Result<Self> {
+        use eyre::ContextCompat as _;
         use itertools::Itertools as _;
 
-        // TODO: actually get a path to the user config file.
-        let content = std::fs::read_to_string("functions.toml")?;
+        let content = std::fs::read_to_string(
+            directories::ProjectDirs::from("io.github", "schneiderfelipe", "ellie")
+                .context("getting project directories")?
+                .config_dir()
+                .join("functions.toml"),
+        )?;
         let Self { provider, function } = toml::from_str(&content)?;
 
         let provider: Vec<_> = provider
