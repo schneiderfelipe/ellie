@@ -94,10 +94,15 @@ fn create_chat_messages(
     new_messages: &[aot::ChatCompletionRequestMessage],
 ) -> Vec<aot::ChatCompletionRequestMessage> {
     // TODO: actually get previous chat messages,
-    // and split/prune to fit the context,
-    // this should always produce a valid context for at least *one* of the MODELS.
-    // Choose some other messages to prepend then?
-    // Choose a suitable system message as well to prepend.
+    // and split/prune to fit the context.
+    // Also add other relevant messages and prepend suitable system message.
+    // This should always produce a valid context for at least *one* of the MODELS.
+    // Tentative workflow:
+    // 1. split/prune with the shortest context-length model in mind (chat-splitter)
+    // 2. add other extremely relevant messages from past interactions
+    // 3. split/prune again with the longest context-length model in mind
+    //    (chat-splitter)
+    // 4. choose a suitable system message as well to prepend.
     new_messages.into()
 }
 
@@ -286,9 +291,8 @@ async fn main() -> eyre::Result<()> {
     // something fails,
     // nothing is stored,
     // so better store everything at the end.
-    // Also,
-    // store groups of sessions,
-    // which helps debugging in the future.
+    // Store them as groups of messages ("interactions or sessions"),
+    // which might help with debugging in the future.
 
     Ok(())
 }
