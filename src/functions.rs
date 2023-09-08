@@ -88,31 +88,38 @@ impl Functions {
 
         // TODO: actually get a path to the user config file.
         let content = std::fs::read_to_string("functions.toml")?;
-        let functions: Self = toml::from_str(&content)?;
+        let Self { provider, function } = toml::from_str(&content)?;
 
-        functions
-            .providers()
-            .sorted_by_key(|provider| &provider.name)
+        let provider: Vec<_> = provider
+            .into_iter()
+            .sorted_by(|p, q| p.name.cmp(&q.name))
             .dedup_by_with_count(|p, q| p.name == q.name)
-            .filter(|(count, _)| *count > 1)
-            .for_each(|(count, provider)| {
-                log::warn!("provider {} defined {} times", provider.name, count);
-            });
-        functions
-            .functions()
-            .sorted_by_key(|function| &function.name)
-            .dedup_by_with_count(|f, g| f.name == g.name)
-            .inspect(|(_, function)| {
-                if functions.get_provider(&function.name).is_none() {
-                    log::warn!("no provider for function {}", function.name);
+            .inspect(|(count, provider)| {
+                if *count > 1 {
+                    log::warn!("provider {} defined {} times", provider.name, count);
                 }
             })
-            .filter(|(count, _)| *count > 1)
-            .for_each(|(count, function)| {
-                log::warn!("function {} defined {} times", function.name, count);
-            });
+            .map(|(_, provider)| provider)
+            .collect();
+        let function = function
+            .into_iter()
+            .sorted_by(|f, g| f.name.cmp(&g.name))
+            .dedup_by_with_count(|f, g| f.name == g.name)
+            .inspect(|(count, function)| {
+                if *count > 1 {
+                    log::warn!("function {} defined {} times", function.name, count);
+                }
+                if !provider
+                    .iter()
+                    .any(|provider| provider.name == function.name)
+                {
+                    log::warn!("function {} has no provider", function.name);
+                }
+            })
+            .map(|(_, function)| function)
+            .collect();
 
-        Ok(functions)
+        Ok(Self { provider, function })
     }
 
     #[inline]
