@@ -4,13 +4,6 @@
 [![Latest Version]][crates.io]
 [![Documentation]][docs.rs]
 
-[Build Status]: https://github.com/schneiderfelipe/ellie/actions/workflows/rust.yml/badge.svg
-[actions]: https://github.com/schneiderfelipe/ellie/actions/workflows/rust.yml
-[Latest Version]: https://img.shields.io/crates/v/ellie.svg
-[crates.io]: https://crates.io/crates/ellie
-[Documentation]: https://img.shields.io/docsrs/ellie
-[docs.rs]: https://docs.rs/ellie
-
 Urban broccoli.
 
 ## Draft
@@ -48,15 +41,17 @@ gets a response,
 and gives you an answer in the end.
 
 ellie uses
+
 - [async-openai](https://crates.io/crates/async-openai)
 - [tiktoken-rs](https://crates.io/crates/tiktoken-rs)
 
 ## Functions
 
-Function calling is supported by delegating to external providers
-(i.e.,
-a script or binary).
-All you have to do is configure a function provider in `~/.config/ellie/functions.toml` (or the equivalent path in your platform):
+Function calling is supported by delegating to external providers. All you have to do is configure a function provider in `~/.config/ellie/functions.toml` (or the equivalent path in your platform).
+
+### Provider Configuration
+
+To configure a function provider, add the following information to the `functions.toml` file:
 
 ```toml
 [[provider]]
@@ -65,23 +60,53 @@ command = "python"
 args = ["get_current_weather.py"]
 ```
 
-### Providers
+This example configures a provider named "get_current_weather" that uses a Python script called "get_current_weather.py".
 
-A function provider reads from the standard input and writes results to the standard output.
-Additionally,
-when given an extra `spec` argument,
-it writes a specification to the standard output.
-So the behavior for the example above would be as follows:
+### Provider Behavior
+
+A function provider reads from the standard input and writes results to the standard output. When given an extra `spec` argument, it writes a specification to the standard output.
+
+For example, running the provider with the `spec` argument would output the following specification:
 
 ```console
 $ python get_current_weather.py spec
-{"name": "get_current_weather", "description": "Get the current weather in a given location", "parameters": {"type": "object", "required": ["location"], "properties": {"location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"}, "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}}}}
-
-$ echo '{"location":"Boston, MA"}' | python get_current_weather.py
-{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}
+{
+  "name": "get_current_weather",
+  "description": "Get the current weather in a given location",
+  "parameters": {
+    "type": "object",
+    "required": ["location"],
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "The city and state, e.g. San Francisco, CA"
+      },
+      "unit": {
+        "type": "string",
+        "enum": ["celsius", "fahrenheit"]
+      }
+    }
+  }
+}
 ```
 
-A template implementation in Python would be as follows:
+To call the function, you can provide the required input as a JSON object through the standard input. The provider will then output the result as a JSON object.
+
+For example:
+
+```console
+$ echo '{"location":"Boston, MA"}' | python get_current_weather.py
+{
+  "location": "Boston, MA",
+  "temperature": "72",
+  "unit": null,
+  "forecast": ["sunny", "windy"]
+}
+```
+
+### Template Implementation
+
+Here is a template implementation in Python:
 
 ```python
 from sys import argv
@@ -98,10 +123,7 @@ match argv[1:]:
         }))
 ```
 
-Of course,
-you could write function providers in any programming language.
-For more on function specifications,
-take a look at the [OpenAI official guide](https://platform.openai.com/docs/guides/gpt/function-calling).
+You can write function providers in any programming language. For more information on function specifications, refer to the [OpenAI official guide](https://platform.openai.com/docs/guides/gpt/function-calling).
 
 ## Detailed output
 
@@ -127,3 +149,10 @@ $ echo 'What is the weather like in Boston?' | RUST_LOG=debug ellie
  DEBUG ellie > {"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"What is the weather like in Boston?"},{"role":"assistant","content":"","function_call":{"name":"get_current_weather","arguments":"{\"location\":\"Boston, MA\"}"}},{"role":"function","content":"{\"forecast\":[\"sunny\",\"windy\"],\"location\":\"Boston, MA\",\"temperature\":\"72\",\"unit\":null}","name":"get_current_weather"}],"functions":[{"name":"get_current_weather","description":"Get the current weather in a given location","parameters":{"properties":{"location":{"description":"The city and state, e.g. San Francisco, CA","type":"string"},"unit":{"enum":["celsius","fahrenheit"],"type":"string"}},"required":["location"],"type":"object"}}],"temperature":0.0,"max_tokens":null}
 The weather in Boston is currently sunny and windy with a temperature of 72 degrees.
 ```
+
+[actions]: https://github.com/schneiderfelipe/ellie/actions/workflows/rust.yml
+[build status]: https://github.com/schneiderfelipe/ellie/actions/workflows/rust.yml/badge.svg
+[crates.io]: https://crates.io/crates/ellie
+[docs.rs]: https://docs.rs/ellie
+[documentation]: https://img.shields.io/docsrs/ellie
+[latest version]: https://img.shields.io/crates/v/ellie.svg
