@@ -56,7 +56,10 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let content = functions::Functions::load()?.call(name, arguments)?;
+    let content = functions::Functions::load()?
+        .get_provider(name)
+        .context("getting function provider")?
+        .call(arguments)?;
     log::info!("{name}({arguments}) = {content}");
 
     Ok(aot::ChatCompletionRequestMessageArgs::default()
@@ -102,7 +105,7 @@ fn create_chat_messages(
     // 3. split/prune again with the longest context-length model in mind
     //    (chat-splitter)
     // 4. choose a suitable system message as well to prepend.
-    new_messages.into()
+    new_messages.to_owned()
 }
 
 /// Create an `OpenAI` request.
@@ -122,7 +125,10 @@ fn create_request(
     log::info!("{model}");
     request.model(model);
 
-    let functions = functions::Functions::load()?.prune(&messages)?;
+    // TODO: choose relevant functions based on the chat messages before collecting.
+    let functions = functions::Functions::load()?
+        .specifications()
+        .collect::<Result<Vec<_>, _>>()?;
     if !functions.is_empty() {
         request.functions(functions);
     }
@@ -198,7 +204,7 @@ async fn create_assistant_message(
                                     .build()?);
                             }
                             "function_call" => {
-                                let name = function_name.trim().into();
+                                let name = function_name.trim().to_owned();
                                 let arguments =
                                     functions::try_compact_json(&function_arguments_buffer);
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
