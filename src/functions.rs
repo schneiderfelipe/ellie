@@ -42,13 +42,12 @@ pub struct Provider {
 impl Provider {
     #[inline]
     pub(super) fn call(&self, arguments: &str) -> std::io::Result<String> {
-        // TODO: see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
-        // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()?;
         // TODO: in the future we might accept multiple json objects and select based on
         // messages.
+        // Kind of tricky though.
         Ok(try_compact_json(&content))
     }
 
@@ -82,15 +81,33 @@ pub struct Functions {
 impl Functions {
     #[inline]
     pub(super) fn load() -> eyre::Result<Self> {
+        use itertools::Itertools as _;
+
         // TODO: actually get a path to the user config file.
         let content = std::fs::read_to_string("functions.toml")?;
-        let functions = toml::from_str(&content)?;
+        let functions: Self = toml::from_str(&content)?;
 
-        // TODO: here's the place to validate stuff.
-        // TODO: check names in functions and providers are all distinct (unique,
-        // the first found is the unique one).
-        // TODO: simply ignore functions without providers,
-        // but give a warning each time.
+        functions
+            .providers()
+            .sorted_by_key(|provider| &provider.name)
+            .dedup_by_with_count(|p, q| p.name == q.name)
+            .filter(|(count, _)| *count > 1)
+            .for_each(|(count, provider)| {
+                log::warn!("provider {} defined {} times", provider.name, count);
+            });
+        functions
+            .functions()
+            .sorted_by_key(|function| &function.name)
+            .dedup_by_with_count(|f, g| f.name == g.name)
+            .inspect(|(_, function)| {
+                if functions.get_provider(&function.name).is_none() {
+                    log::warn!("no provider for function {}", function.name);
+                }
+            })
+            .filter(|(count, _)| *count > 1)
+            .for_each(|(count, function)| {
+                log::warn!("function {} defined {} times", function.name, count);
+            });
 
         Ok(functions)
     }
