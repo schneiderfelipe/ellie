@@ -1,9 +1,8 @@
-mod functions;
-
 use async_openai::types as aot;
 use color_eyre::eyre;
 use eyre::{Context as _, ContextCompat as _};
-use functions::{try_compact_json, Functions};
+
+mod functions;
 
 /// Temperature used in all requests.
 const TEMPERATURE: f32 = 0.0;
@@ -57,7 +56,7 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let content = Functions::load()?.call(name, arguments)?;
+    let content = functions::Functions::load()?.call(name, arguments)?;
     log::info!("{name}({arguments}) = {content}");
 
     Ok(aot::ChatCompletionRequestMessageArgs::default()
@@ -123,7 +122,7 @@ fn create_request(
     log::info!("{model}");
     request.model(model);
 
-    let functions = Functions::load()?.prune(&messages)?;
+    let functions = functions::Functions::load()?.prune(&messages)?;
     if !functions.is_empty() {
         request.functions(functions);
     }
@@ -200,7 +199,8 @@ async fn create_assistant_message(
                             }
                             "function_call" => {
                                 let name = function_name.trim().into();
-                                let arguments = try_compact_json(&function_arguments_buffer);
+                                let arguments =
+                                    functions::try_compact_json(&function_arguments_buffer);
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
                                     .role(aot::Role::Assistant)
                                     .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236

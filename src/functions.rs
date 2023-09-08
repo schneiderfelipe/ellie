@@ -15,8 +15,8 @@ pub fn try_compact_json(maybe_json: &str) -> String {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Functions {
-    function: Vec<aot::ChatCompletionFunctions>,
     provider: Vec<Provider>,
+    function: Vec<aot::ChatCompletionFunctions>,
 }
 #[derive(Debug, serde::Deserialize)]
 struct Provider {
@@ -28,6 +28,8 @@ struct Provider {
 impl From<Functions> for Vec<aot::ChatCompletionFunctions> {
     #[inline]
     fn from(functions: Functions) -> Self {
+        // TODO: the logic here changed,
+        // things should be calculated now
         functions.function
     }
 }
@@ -37,10 +39,7 @@ impl Functions {
     pub(super) fn load() -> eyre::Result<Self> {
         // TODO: actually get a path to the user config file.
         let content = std::fs::read_to_string("functions.toml")?;
-        let Self {
-            mut function,
-            provider,
-        } = toml::from_str(&content)?;
+        let Self { provider, function } = toml::from_str(&content)?;
 
         // TODO: check names in functions and providers are all distinct.
 
@@ -51,46 +50,14 @@ impl Functions {
         // simply ignore functions without providers and give a warning.
 
         // TODO: calculate specifications on demand
-        for provider in &provider {
-            let aot::ChatCompletionFunctions {
-                name: actual_name,
-                description: mut actual_description,
-                parameters: mut actual_parameters,
-            } = provider.specification()?;
+        // for provider in &provider {
+        //     let specification = unimplemented!();
+        //     function.push(specification)
+        // }
 
-            if let Some(index) = function
-                .iter()
-                .position(|function| function.name == actual_name)
-            {
-                let aot::ChatCompletionFunctions {
-                    name: _,
-                    description,
-                    parameters,
-                } = function.swap_remove(index);
-                actual_description = description.or(actual_description);
+        // TODO: here's the place to validate stuff.
 
-                if let (Some(actual_parameters), Some(parameters)) =
-                    (&mut actual_parameters, &parameters)
-                {
-                    json_patch::merge(actual_parameters, parameters);
-                } else {
-                    actual_parameters = parameters.or(actual_parameters);
-                }
-            }
-
-            let mut specification = aot::ChatCompletionFunctionsArgs::default();
-            specification.name(actual_name);
-            if let Some(actual_description) = actual_description {
-                specification.description(actual_description);
-            }
-            if let Some(actual_parameters) = actual_parameters {
-                specification.parameters(actual_parameters);
-            }
-
-            function.push(specification.build()?)
-        }
-
-        Ok(Self { function, provider })
+        Ok(Self { provider, function })
     }
 
     #[inline]
@@ -110,12 +77,46 @@ impl Functions {
     }
 
     #[inline]
+    fn get_provider(&self, name: &str) -> Option<&Provider> {
+        self.provider.iter().find(|provider| provider.name == name)
+    }
+
+    #[inline]
+    fn get_function(&self, name: &str) -> Option<&aot::ChatCompletionFunctions> {
+        self.function.iter().find(|function| function.name == name)
+    }
+
+    #[inline]
     pub(super) fn call(&self, name: &str, arguments: &str) -> eyre::Result<String> {
-        self.provider
-            .iter()
-            .find(|provider| provider.name == name)
+        self.get_provider(name)
             .context("getting function provider")?
             .call(arguments)
+    }
+
+    #[inline]
+    fn specification(&self, name: &str) -> eyre::Result<aot::ChatCompletionFunctions> {
+        let mut specification = self
+            .get_provider(name)
+            .context("getting function provider")?
+            .specification()?;
+
+        if let Some(aot::ChatCompletionFunctions {
+            name: _,
+            description,
+            parameters,
+        }) = self.get_function(&specification.name)
+        {
+            specification.description = description.clone().or(specification.description);
+            if let (Some(specification_parameters), Some(parameters)) =
+                (&mut specification.parameters, &parameters)
+            {
+                json_patch::merge(specification_parameters, parameters);
+            } else {
+                specification.parameters = parameters.clone().or(specification.parameters);
+            }
+        }
+
+        Ok(specification)
     }
 }
 
@@ -127,6 +128,8 @@ impl Provider {
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()?;
+        // TODO: in the future we might accept multiple json objects and prune based on
+        // messages.
         Ok(try_compact_json(&content))
     }
 
