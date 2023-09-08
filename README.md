@@ -47,11 +47,13 @@ ellie uses
 
 ## Functions
 
-Function calling is supported by delegating to external providers. All you have to do is configure a function provider in `~/.config/ellie/functions.toml` (or the equivalent path in your platform).
+Function calling is supported by delegating to external providers.
+All you have to do is configure a function provider in `~/.config/ellie/functions.toml` (or the equivalent path in your platform).
 
-### Provider Configuration
+### Provider configuration
 
-To configure a function provider, add the following information to the `functions.toml` file:
+To configure a function provider,
+add the following information to the `functions.toml` file:
 
 ```toml
 [[provider]]
@@ -62,11 +64,15 @@ args = ["get_current_weather.py"]
 
 This example configures a provider named "get_current_weather" that uses a Python script called "get_current_weather.py".
 
-### Provider Behavior
+### Provider behavior
 
-A function provider reads from the standard input and writes results to the standard output. When given an extra `spec` argument, it writes a specification to the standard output.
+A function provider reads from the standard input and
+writes results to the standard output.
+When given an extra `spec` argument,
+it writes a specification to the standard output.
 
-For example, running the provider with the `spec` argument would output the following specification:
+For example,
+running the provider with the `spec` argument would output the following specification:
 
 ```console
 $ python get_current_weather.py spec
@@ -90,7 +96,9 @@ $ python get_current_weather.py spec
 }
 ```
 
-To call the function, you can provide the required input as a JSON object through the standard input. The provider will then output the result as a JSON object.
+To call the function,
+you can provide the required input as a JSON object through the standard input.
+The provider will then output the result as a JSON object.
 
 For example:
 
@@ -104,7 +112,7 @@ $ echo '{"location":"Boston, MA"}' | python get_current_weather.py
 }
 ```
 
-### Template Implementation
+### Template implementation
 
 Here is a template implementation in Python:
 
@@ -123,7 +131,9 @@ match argv[1:]:
         }))
 ```
 
-You can write function providers in any programming language. For more information on function specifications, refer to the [OpenAI official guide](https://platform.openai.com/docs/guides/gpt/function-calling).
+You can write function providers in any programming language.
+For more information on function specifications,
+refer to the [OpenAI official guide](https://platform.openai.com/docs/guides/gpt/function-calling).
 
 ## Detailed output
 
