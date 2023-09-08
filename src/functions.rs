@@ -13,7 +13,7 @@ pub fn try_compact_json(maybe_json: &str) -> String {
 }
 
 #[inline]
-fn merge(specification: &mut ChatCompletionFunctions, patch: &ChatCompletionFunctions) {
+fn merge(spec: &mut ChatCompletionFunctions, patch: &ChatCompletionFunctions) {
     let ChatCompletionFunctions {
         name: _,
         description,
@@ -21,14 +21,12 @@ fn merge(specification: &mut ChatCompletionFunctions, patch: &ChatCompletionFunc
     } = patch;
 
     if let Some(description) = description {
-        specification.description = Some(description.clone());
+        spec.description = Some(description.clone());
     }
-    if let (Some(specification_parameters), Some(parameters)) =
-        (&mut specification.parameters, &parameters)
-    {
-        json_patch::merge(specification_parameters, parameters);
+    if let (Some(spec_parameters), Some(parameters)) = (&mut spec.parameters, &parameters) {
+        json_patch::merge(spec_parameters, parameters);
     } else if let Some(parameters) = parameters {
-        specification.parameters = Some(parameters.clone());
+        spec.parameters = Some(parameters.clone());
     }
 }
 
@@ -55,22 +53,22 @@ impl Provider {
 
     #[inline]
     fn specification(&self) -> eyre::Result<ChatCompletionFunctions> {
-        let specification = duct::cmd(
+        let spec = duct::cmd(
             &self.command,
             self.args
                 .iter()
                 .map(AsRef::as_ref)
-                .chain(std::iter::once("specification")),
+                .chain(std::iter::once("spec")),
         )
         .read()?;
 
-        let mut specification: ChatCompletionFunctions = serde_json::from_str(&specification)?;
-        if specification.name != self.name {
-            log::warn!("{} != {}", self.name, specification.name);
-            specification.name = self.name.clone();
+        let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
+        if spec.name != self.name {
+            log::warn!("{} != {}", self.name, spec.name);
+            spec.name = self.name.clone();
         }
 
-        Ok(specification)
+        Ok(spec)
     }
 }
 
@@ -153,11 +151,11 @@ impl Functions {
         &self,
     ) -> impl Iterator<Item = eyre::Result<ChatCompletionFunctions>> + '_ {
         self.providers().map(|provider| {
-            let mut specification = provider.specification()?;
-            if let Some(function) = self.get_function(&specification.name) {
-                merge(&mut specification, function);
+            let mut spec = provider.specification()?;
+            if let Some(function) = self.get_function(&spec.name) {
+                merge(&mut spec, function);
             }
-            Ok(specification)
+            Ok(spec)
         })
     }
 }

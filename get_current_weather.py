@@ -13,7 +13,7 @@ match argv[1:]:  # ignore "get_current_weather.py"
                 }
             )
         )
-    case ["specification"]:
+    case ["spec"]:
         print(
             json.dumps(
                 {
