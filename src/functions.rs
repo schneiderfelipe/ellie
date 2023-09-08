@@ -36,15 +36,13 @@ impl Functions {
     #[inline]
     pub(super) fn load() -> eyre::Result<Self> {
         // TODO: actually get a path to the user config file.
-        let functions = std::fs::read_to_string("functions.toml")?;
-        let functions = toml::from_str(&functions)?;
+        let content = std::fs::read_to_string("functions.toml")?;
+        let Self {
+            mut function,
+            provider,
+        } = toml::from_str(&content)?;
 
-        // TODO: actual function specifications will be optionally retrieved directly
-        // from binaries/scripts in the future.
-        // There will be a way of overriding
-        // what the binary/script says using the configuration file,
-        // so that the
-        // configuration file is mostly clean most of the time.
+        // TODO: check names in functions and providers are all distinct.
 
         // TODO: make sure there is a provider for each function,
         // i.e.,
@@ -52,7 +50,60 @@ impl Functions {
         // TODO: alternatively,
         // simply ignore functions without providers and give a warning.
 
-        Ok(functions)
+        for Provider {
+            name,
+            command,
+            args,
+        } in &provider
+        {
+            let original = duct::cmd(
+                command,
+                args.iter()
+                    .map(std::convert::AsRef::as_ref)
+                    .chain(std::iter::once("specification")),
+            )
+            .read()?;
+
+            let aot::ChatCompletionFunctions {
+                name: mut actual_name,
+                description: mut actual_description,
+                parameters: mut actual_parameters,
+            } = serde_json::from_str(&original)?;
+
+            if actual_name != *name {
+                log::warn!("{actual_name} != {name}");
+                actual_name = name.clone();
+            }
+            if let Some(index) = function.iter().position(|f| f.name == actual_name) {
+                let aot::ChatCompletionFunctions {
+                    name: _,
+                    description,
+                    parameters,
+                } = function.swap_remove(index);
+                actual_description = description.or(actual_description);
+
+                if let (Some(actual_parameters), Some(parameters)) =
+                    (&mut actual_parameters, &parameters)
+                {
+                    json_patch::merge(actual_parameters, parameters);
+                } else {
+                    actual_parameters = parameters.or(actual_parameters);
+                }
+            }
+
+            let mut specification = aot::ChatCompletionFunctionsArgs::default();
+            specification.name(actual_name);
+            if let Some(actual_description) = actual_description {
+                specification.description(actual_description);
+            }
+            if let Some(actual_parameters) = actual_parameters {
+                specification.parameters(actual_parameters);
+            }
+
+            function.push(specification.build()?)
+        }
+
+        Ok(Self { function, provider })
     }
 
     #[inline]
