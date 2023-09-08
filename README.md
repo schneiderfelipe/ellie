@@ -51,6 +51,58 @@ ellie uses
 - [async-openai](https://crates.io/crates/async-openai)
 - [tiktoken-rs](https://crates.io/crates/tiktoken-rs)
 
+## Functions
+
+Function calling is supported by delegating to external providers
+(i.e.,
+a script or binary).
+All you have to do is configure a function provider in `~/.config/ellie/functions.toml` (or the equivalent path in your platform):
+
+```toml
+[[provider]]
+name = "get_current_weather"
+command = "python"
+args = ["get_current_weather.py"]
+```
+
+### Providers
+
+A function provider reads from the standard input and writes results to the standard output.
+Additionally,
+when given an extra `spec` argument,
+it writes a specification to the standard output.
+So the behavior for the example above would be as follows:
+
+```console
+$ python get_current_weather.py spec
+{"name": "get_current_weather", "description": "Get the current weather in a given location", "parameters": {"type": "object", "required": ["location"], "properties": {"location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"}, "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}}}}
+
+$ echo '{"location":"Boston, MA"}' | python get_current_weather.py
+{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}
+```
+
+A template implementation in Python would be as follows:
+
+```python
+from sys import argv
+import json
+
+match argv[1:]:
+    case []:
+        print(json.dumps({
+            # ...
+        }))
+    case ["spec"]:
+        print(json.dumps({
+            # ...
+        }))
+```
+
+Of course,
+you could write function providers in any programming language.
+For more on function specifications,
+take a look at the [OpenAI official guide](https://platform.openai.com/docs/guides/gpt/function-calling).
+
 ## Detailed output
 
 **TL;DR**: use logging.
