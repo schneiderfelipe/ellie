@@ -36,6 +36,7 @@ fn merge(specification: &mut ChatCompletionFunctions, patch: &ChatCompletionFunc
 pub struct Provider {
     name: String,
     command: String,
+    #[serde(default)]
     args: Vec<String>,
 }
 
@@ -74,7 +75,9 @@ impl Provider {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Functions {
+    #[serde(default)]
     provider: Vec<Provider>,
+    #[serde(default)]
     function: Vec<ChatCompletionFunctions>,
 }
 
