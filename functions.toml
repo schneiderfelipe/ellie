@@ -7,7 +7,10 @@ unit = { enum = ["fahrenheit"] } # override unit
 [[provider]]
 name = "get_current_weather"
 command = "python"
-args = [
-  "-c",
-  "import sys, subprocess; args = sys.argv[1:]; subprocess.call(['cat', 'current_weather.json']) if len(args) == 0 else subprocess.call(['cat', 'current_weather_specification.json'])",
-]
+args = ["-c", """
+import sys, subprocess
+if len(sys.argv[1:]) == 0:
+    subprocess.call(['cat', 'current_weather.json'])
+else:
+    subprocess.call(['cat', 'current_weather_specification.json'])
+"""]
