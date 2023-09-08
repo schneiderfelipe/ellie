@@ -1,0 +1,10 @@
+[[function]]
+name = "get_current_weather"
+
+[function.parameters.properties]
+unit = { enum = ["fahrenheit"] } # override unit
+
+[[provider]]
+name = "get_current_weather"
+command = "python"
+args = ["get_current_weather.py"]

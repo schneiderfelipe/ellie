@@ -2,6 +2,8 @@ use async_openai::types as aot;
 use color_eyre::eyre;
 use eyre::{Context as _, ContextCompat as _};
 
+mod functions;
+
 /// Temperature used in all requests.
 const TEMPERATURE: f32 = 0.0;
 
@@ -28,7 +30,7 @@ fn messages_fit_model(
 ) -> eyre::Result<bool> {
     Ok(
         tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
-            .map_err(|e| eyre::eyre!(e))?
+            .map_err(|err| eyre::eyre!(err))?
             >= MIN_COMPLETION_TOKENS,
     )
 }
@@ -46,43 +48,6 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
-/// Trim text
-/// and try to produce a compact JSON string out of it,
-/// returning an owned trimmed string if serialization fails.
-#[inline]
-fn try_compact_json(maybe_json: &str) -> String {
-    let maybe_json = maybe_json.trim();
-    serde_json::from_str::<serde_json::Value>(maybe_json)
-        .and_then(|value| serde_json::to_string(&value))
-        .unwrap_or_else(|_| maybe_json.into())
-}
-
-#[inline]
-fn create_functions(
-    _messages: &[aot::ChatCompletionRequestMessage],
-) -> eyre::Result<Option<impl Into<Vec<aot::ChatCompletionFunctions>>>> {
-    // TODO: actual function specifications will be retrieved here in the future,
-    // directly from binaries/scripts.
-    Ok(Some([aot::ChatCompletionFunctionsArgs::default()
-        .name("get_current_weather")
-        .description("Get the current weather in a given location")
-        .parameters(serde_json::json!({
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "The city and state, e.g. San Francisco, CA",
-                },
-                "unit": {
-                    "type": "string",
-                    "enum": ["celsius", "fahrenheit"],
-                },
-            },
-            "required": ["location"],
-        }))
-        .build()?]))
-}
-
 /// Call the given function with the given arguments
 /// and build a message out of
 /// the returned contents.
@@ -91,16 +56,17 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    // TODO: eventually call functions,
-    // see <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L67>
-    // and <https://github.com/64bit/async-openai/blob/37769355eae63d72b5d6498baa6c8cdcce910d71/examples/function-call-stream/src/main.rs#L84>.
-    log::info!("{name} {arguments}");
+    let content = functions::Functions::load()
+        .unwrap_or_default()
+        .get_provider(name)
+        .context("getting function provider")?
+        .call(arguments)?;
+    log::info!("{name}({arguments}) = {content}");
 
-    let content = r#"{"location": "Boston, MA", "temperature": "72", "unit": null, "forecast": ["sunny", "windy"]}"#;
     Ok(aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
         .name(name)
-        .content(try_compact_json(content))
+        .content(content)
         .build()?)
 }
 
@@ -131,11 +97,16 @@ fn create_chat_messages(
     new_messages: &[aot::ChatCompletionRequestMessage],
 ) -> Vec<aot::ChatCompletionRequestMessage> {
     // TODO: actually get previous chat messages,
-    // and split/prune to fit the context,
-    // this should always produce a valid context for at least *one* of the MODELS.
-    // Choose some other messages to prepend then?
-    // Choose a suitable system message as well to prepend.
-    new_messages.into()
+    // and split/prune to fit the context.
+    // Also add other relevant messages and prepend suitable system message.
+    // This should always produce a valid context for at least *one* of the MODELS.
+    // Tentative workflow:
+    // 1. split/prune with the shortest context-length model in mind (chat-splitter)
+    // 2. add other extremely relevant messages from past interactions
+    // 3. split/prune again with the longest context-length model in mind
+    //    (chat-splitter)
+    // 4. choose a suitable system message as well to prepend.
+    new_messages.to_owned()
 }
 
 /// Create an `OpenAI` request.
@@ -148,11 +119,19 @@ fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
 ) -> eyre::Result<aot::CreateChatCompletionRequest> {
     let mut request = aot::CreateChatCompletionRequestArgs::default();
-    request.temperature(TEMPERATURE).model(
-        choose_model(&messages)
-            .context("choosing model with large enough context length for the given messages")?,
-    );
-    if let Some(functions) = create_functions(&messages)? {
+    request.temperature(TEMPERATURE);
+
+    let model = choose_model(&messages)
+        .context("choosing model with large enough context length for the given messages")?;
+    log::info!("{model}");
+    request.model(model);
+
+    // TODO: choose relevant functions based on the chat messages before collecting.
+    let functions = functions::Functions::load()
+        .unwrap_or_default()
+        .specifications()
+        .collect::<Result<Vec<_>, _>>()?;
+    if !functions.is_empty() {
         request.functions(functions);
     }
     Ok(request.messages(messages).build()?)
@@ -227,8 +206,9 @@ async fn create_assistant_message(
                                     .build()?);
                             }
                             "function_call" => {
-                                let name = function_name.trim().into();
-                                let arguments = try_compact_json(&function_arguments_buffer);
+                                let name = function_name.trim().to_owned();
+                                let arguments =
+                                    functions::try_compact_json(&function_arguments_buffer);
                                 return Ok(aot::ChatCompletionRequestMessageArgs::default()
                                     .role(aot::Role::Assistant)
                                     .content("") // BUG: https://github.com/64bit/async-openai/issues/103#issue-1884273236
@@ -319,9 +299,8 @@ async fn main() -> eyre::Result<()> {
     // something fails,
     // nothing is stored,
     // so better store everything at the end.
-    // Also,
-    // store groups of sessions,
-    // which helps debugging in the future.
+    // Store them as groups of messages ("interactions or sessions"),
+    // which might help with debugging in the future.
 
     Ok(())
 }
