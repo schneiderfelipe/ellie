@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 
 authors = ["Felipe S. S. Schneider <schneider.felipe.5@gmail.com>"]
-description = "Urban broccoli"
+description = "echo \"It's dangerous to go alone\" | ellie"
 repository = "https://github.com/schneiderfelipe/ellie"
 documentation = "https://docs.rs/ellie"
 rust-version = "1.72.0"
