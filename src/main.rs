@@ -96,16 +96,6 @@ fn create_user_message(input: &str) -> eyre::Result<aot::ChatCompletionRequestMe
 fn create_chat_messages(
     new_messages: &[aot::ChatCompletionRequestMessage],
 ) -> Vec<aot::ChatCompletionRequestMessage> {
-    // TODO: actually get previous chat messages,
-    // and split/prune to fit the context.
-    // Also add other relevant messages and prepend suitable system message.
-    // This should always produce a valid context for at least *one* of the MODELS.
-    // Tentative workflow:
-    // 1. split/prune with the shortest context-length model in mind (chat-splitter)
-    // 2. add other extremely relevant messages from past interactions
-    // 3. split/prune again with the longest context-length model in mind
-    //    (chat-splitter)
-    // 4. choose a suitable system message as well to prepend.
     new_messages.to_owned()
 }
 
