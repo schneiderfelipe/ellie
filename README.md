@@ -2,7 +2,8 @@
 
 [![Build Status]][actions]
 [![Latest Version]][crates.io]
-[![Documentation]][docs.rs]
+
+<!-- [![Documentation]][docs.rs] -->
 
 ```console
 $ echo "It's dangerous to go alone" | ellie
