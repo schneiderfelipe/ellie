@@ -280,12 +280,5 @@ async fn main() -> eyre::Result<()> {
         update_new_messages(&mut new_messages, assistant_message)?;
     }
 
-    // TODO: store new messages with atomicity guarantees: if
-    // something fails,
-    // nothing is stored,
-    // so better store everything at the end.
-    // Store them as groups of messages ("interactions or sessions"),
-    // which might help with debugging in the future.
-
     Ok(())
 }
