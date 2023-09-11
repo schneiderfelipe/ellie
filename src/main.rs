@@ -116,7 +116,6 @@ fn create_request(
     log::info!("{model}");
     request.model(model);
 
-    // TODO: choose relevant functions based on the chat messages before collecting.
     let functions = functions::Functions::load()
         .unwrap_or_default()
         .specifications()
