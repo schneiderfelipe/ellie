@@ -9,8 +9,8 @@ $ echo "It's dangerous to go alone" | ellie
 Take this!
 ```
 
-ellie is a command-line interface to ChatGPT written in Rust,
-with supporting for function calling through external providers.
+ellie is a Rust-based command-line interface to ChatGPT,
+featuring support for function calling through external providers.
 
 ## Functions
 
