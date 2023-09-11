@@ -44,10 +44,6 @@ impl Provider {
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()?;
-        // TODO: in the future we might accept multiple json objects and select based on
-        // messages.
-        // Kind of tricky though.
-        // Selection may happen in src/main.rs so return some kind of iterator?
         Ok(try_compact_json(&content))
     }
 
