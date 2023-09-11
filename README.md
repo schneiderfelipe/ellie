@@ -105,7 +105,7 @@ refer to the [OpenAI official guide](https://platform.openai.com/docs/guides/gpt
 
 ## Detailed output
 
-**TL;DR**: use logging.
+**TL;DR**: use logging for now.
 
 If you just want to see functions being called,
 use `RUST_LOG=info`:
