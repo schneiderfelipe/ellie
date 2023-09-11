@@ -147,8 +147,6 @@ impl Functions {
         &self,
     ) -> impl Iterator<Item = eyre::Result<ChatCompletionFunctions>> + '_ {
         self.providers().map(|provider| {
-            // TODO: ignore provider if spec fails,
-            // but warn the user
             let mut spec = provider.specification()?;
             if let Some(function) = self.get_function(&spec.name) {
                 merge(&mut spec, function);
