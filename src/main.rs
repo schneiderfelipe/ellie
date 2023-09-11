@@ -261,10 +261,6 @@ async fn main() -> eyre::Result<()> {
     let user_message = create_user_message(&input)?;
     let mut new_messages = vec![user_message];
 
-    // TODO: timeout,
-    // backoff,
-    // etc.
-    // Just to avoid hanging.
     let client = async_openai::Client::new();
     while !matches!(
         new_messages
