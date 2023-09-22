@@ -99,35 +99,34 @@ impl Functions {
             std::fs::read_to_string(get_project_dirs()?.config_dir().join("functions.toml"))?;
         let Self { provider, function } = toml::from_str(&content)?;
 
-        let provider = <Result<Vec<_>, _>>::from_iter(
-            provider
-                .into_iter()
-                .sorted_by(|p, q| p.name.cmp(&q.name))
-                .dedup_by_with_count(|p, q| p.name == q.name)
-                .inspect(|(count, provider)| {
-                    if *count > 1 {
-                        log::warn!("provider {} defined {} times", provider.name, count);
-                    }
-                })
-                .map(|(_, provider)| provider)
-                .map(
-                    |Provider {
-                         name,
-                         command,
-                         args,
-                     }|
-                     -> Result<_, shellexpand::LookupError<_>> {
-                        Ok(Provider {
-                            name,
-                            command,
-                            args: <Result<_, _>>::from_iter(
-                                args.into_iter()
-                                    .map(|arg| shellexpand::full(&arg).map(Into::into)),
-                            )?,
-                        })
-                    },
-                ),
-        )?;
+        let provider: Vec<_> = provider
+            .into_iter()
+            .sorted_by(|p, q| p.name.cmp(&q.name))
+            .dedup_by_with_count(|p, q| p.name == q.name)
+            .inspect(|(count, provider)| {
+                if *count > 1 {
+                    log::warn!("provider {} defined {} times", provider.name, count);
+                }
+            })
+            .map(|(_, provider)| provider)
+            .map(
+                |Provider {
+                     name,
+                     command,
+                     args,
+                 }|
+                 -> Result<_, shellexpand::LookupError<_>> {
+                    Ok(Provider {
+                        name,
+                        command,
+                        args: <Result<_, _>>::from_iter(
+                            args.into_iter()
+                                .map(|arg| shellexpand::full(&arg).map(Into::into)),
+                        )?,
+                    })
+                },
+            )
+            .collect::<Result<_, _>>()?;
         let function = function
             .into_iter()
             .sorted_by(|f, g| f.name.cmp(&g.name))
