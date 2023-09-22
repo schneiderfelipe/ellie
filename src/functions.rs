@@ -117,14 +117,13 @@ impl Functions {
                          args,
                      }|
                      -> Result<_, shellexpand::LookupError<_>> {
-                        let args = <Result<_, _>>::from_iter(
-                            args.into_iter()
-                                .map(|arg| shellexpand::full(&arg).map(Into::into)),
-                        )?;
                         Ok(Provider {
                             name,
                             command,
-                            args,
+                            args: <Result<_, _>>::from_iter(
+                                args.into_iter()
+                                    .map(|arg| shellexpand::full(&arg).map(Into::into)),
+                            )?,
                         })
                     },
                 ),
