@@ -24,6 +24,7 @@ log = "0.4.20"
 pretty_env_logger = "0.5.0"
 serde = { version = "1.0.188", default-features = false }
 serde_json = { version = "1.0.105", default-features = false }
+shellexpand = "3.1.0"
 tiktoken-rs = { version = "0.5.3", features = ["async-openai"] }
 tokio = { version = "1.32.0", features = ["rt-multi-thread", "io-std"], default-features = false }
 toml = { features = ["parse"], default-features = false, version = "0.7.6" }
