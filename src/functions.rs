@@ -119,10 +119,10 @@ impl Functions {
                     Ok(Provider {
                         name,
                         command,
-                        args: <Result<_, _>>::from_iter(
-                            args.into_iter()
-                                .map(|arg| shellexpand::full(&arg).map(Into::into)),
-                        )?,
+                        args: args
+                            .into_iter()
+                            .map(|arg| shellexpand::full(&arg).map(Into::into))
+                            .collect::<Result<_, _>>()?,
                     })
                 },
             )
