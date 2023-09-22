@@ -114,16 +114,15 @@ impl Functions {
                      name,
                      command,
                      args,
-                 }|
-                 -> Result<_, shellexpand::LookupError<_>> {
-                    Ok(Provider {
-                        name,
-                        command,
-                        args: args
-                            .into_iter()
-                            .map(|arg| shellexpand::full(&arg).map(Into::into))
-                            .collect::<Result<_, _>>()?,
-                    })
+                 }| {
+                    args.into_iter()
+                        .map(|arg| shellexpand::full(&arg).map(Into::into))
+                        .collect::<Result<_, _>>()
+                        .map(|args| Provider {
+                            name,
+                            command,
+                            args,
+                        })
                 },
             )
             .collect::<Result<_, _>>()?;
