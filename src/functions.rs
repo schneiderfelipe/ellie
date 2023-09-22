@@ -49,14 +49,19 @@ pub struct Provider {
 impl Provider {
     #[inline]
     pub(super) fn call(&self, arguments: &str) -> color_eyre::Result<String> {
+        use eyre::Context as _;
+
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
-            .read()?;
+            .read()
+            .context("calling function")?;
         Ok(try_compact_json(&content))
     }
 
     #[inline]
     fn specification(&self) -> eyre::Result<ChatCompletionFunctions> {
+        use eyre::Context as _;
+
         let spec = duct::cmd(
             &self.command,
             self.args
@@ -64,7 +69,8 @@ impl Provider {
                 .map(AsRef::as_ref)
                 .chain(std::iter::once("spec")),
         )
-        .read()?;
+        .read()
+        .context("getting function specification")?;
 
         let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
         if spec.name != self.name {
@@ -112,7 +118,7 @@ impl Functions {
                  -> Result<_, shellexpand::LookupError<_>> {
                     let args: Result<_, _> = args
                         .into_iter()
-                        .map(|arg| shellexpand::env(&arg).map(Into::into))
+                        .map(|arg| shellexpand::full(&arg).map(Into::into))
                         .collect();
                     let args = args?;
                     Ok(Provider {
