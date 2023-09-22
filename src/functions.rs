@@ -50,7 +50,6 @@ impl Provider {
     #[inline]
     pub(super) fn call(&self, arguments: &str) -> color_eyre::Result<String> {
         let content = duct::cmd(&self.command, &self.args)
-            .dir(get_project_dirs()?.cache_dir())
             .stdin_bytes(arguments)
             .read()?;
         Ok(try_compact_json(&content))
@@ -65,7 +64,6 @@ impl Provider {
                 .map(AsRef::as_ref)
                 .chain(std::iter::once("spec")),
         )
-        .dir(get_project_dirs()?.cache_dir())
         .read()?;
 
         let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
