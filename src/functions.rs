@@ -176,6 +176,12 @@ impl Functions {
             if let Some(function) = self.get_function(&spec.name) {
                 merge(&mut spec, function);
             }
+            // TODO: warn/err on the user when a function has a malformed specification and
+            // probably ignore said function.
+            // The bare minimum seems to be name,
+            // parameters,
+            // parameters>type,
+            // parameters>properties.
             Ok(spec)
         })
     }
