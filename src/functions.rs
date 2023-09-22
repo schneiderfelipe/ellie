@@ -1,6 +1,14 @@
 use async_openai::types::ChatCompletionFunctions;
 use color_eyre::eyre;
 
+#[inline]
+fn get_project_dirs() -> color_eyre::Result<directories::ProjectDirs> {
+    use eyre::ContextCompat as _;
+
+    directories::ProjectDirs::from("io.github", "schneiderfelipe", "ellie")
+        .context("getting project directories")
+}
+
 /// Trim text
 /// and try to produce a compact JSON string out of it,
 /// returning an owned trimmed string if serialization fails.
@@ -79,15 +87,10 @@ pub struct Functions {
 impl Functions {
     #[inline]
     pub(super) fn load() -> eyre::Result<Self> {
-        use eyre::ContextCompat as _;
         use itertools::Itertools as _;
 
-        let content = std::fs::read_to_string(
-            directories::ProjectDirs::from("io.github", "schneiderfelipe", "ellie")
-                .context("getting project directories")?
-                .config_dir()
-                .join("functions.toml"),
-        )?;
+        let content =
+            std::fs::read_to_string(get_project_dirs()?.config_dir().join("functions.toml"))?;
         let Self { provider, function } = toml::from_str(&content)?;
 
         let provider: Vec<_> = provider
