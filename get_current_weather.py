@@ -1,7 +1,7 @@
-from sys import argv
+import sys
 import json
 
-match argv[1:]:  # ignore "get_current_weather.py"
+match sys.argv[1:]:  # ignore script name
     case []:
         print(
             json.dumps(
@@ -10,7 +10,8 @@ match argv[1:]:  # ignore "get_current_weather.py"
                     "temperature": "72",
                     "unit": None,
                     "forecast": ["sunny", "windy"],
-                }
+                },
+                separators=(",", ":"),
             )
         )
     case ["spec"]:
@@ -33,6 +34,7 @@ match argv[1:]:  # ignore "get_current_weather.py"
                             },
                         },
                     },
-                }
+                },
+                separators=(",", ":"),
             )
         )
