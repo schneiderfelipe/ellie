@@ -59,7 +59,6 @@ fn create_function_message(
     let content = functions::Functions::load()
         .unwrap_or_default()
         .call(name, arguments)
-        .map(Into::into)
         .map_err(either::Either::Left)?;
     log::info!("{name}({arguments}) = {content:?}");
     aot::ChatCompletionRequestMessageArgs::default()
