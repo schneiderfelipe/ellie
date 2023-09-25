@@ -91,7 +91,7 @@ impl Provider {
 
         let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
         if spec.name != self.name {
-            log::warn!("{} != {}", self.name, spec.name);
+            log::warn!("{name} != {other}", name = self.name, other = spec.name);
             spec.name = self.name.clone();
         }
 
@@ -122,7 +122,10 @@ impl Functions {
             .dedup_by_with_count(|p, q| p.name == q.name)
             .inspect(|(count, provider)| {
                 if *count > 1 {
-                    log::warn!("provider {} defined {} times", provider.name, count);
+                    log::warn!(
+                        "provider {name} defined {count} times",
+                        name = provider.name
+                    );
                 }
             })
             .map(|(_, provider)| provider)
@@ -151,13 +154,16 @@ impl Functions {
             .dedup_by_with_count(|f, g| f.name == g.name)
             .inspect(|(count, function)| {
                 if *count > 1 {
-                    log::warn!("function {} defined {} times", function.name, count);
+                    log::warn!(
+                        "function {name} defined {count} times",
+                        name = function.name
+                    );
                 }
                 if !provider
                     .iter()
                     .any(|provider| provider.name == function.name)
                 {
-                    log::warn!("function {} has no provider", function.name);
+                    log::warn!("function {name} has no provider", name = function.name);
                 }
             })
             .map(|(_, function)| function)
