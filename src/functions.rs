@@ -62,6 +62,7 @@ impl Provider {
     fn call(&self, arguments: &str) -> color_eyre::Result<String> {
         use eyre::Context as _;
 
+        log::info!("{name}({arguments})", name = self.name);
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()
