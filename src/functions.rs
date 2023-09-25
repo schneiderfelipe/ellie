@@ -62,10 +62,18 @@ impl Provider {
         use color_eyre::eyre::Context as _;
 
         log::info!("{name}({arguments})", name = self.name);
-        let content = duct::cmd(&self.command, &self.args)
+        let content = if self.safe
+            || dialoguer::Confirm::new()
+                .with_prompt("Execute function provider?")
+                .interact()?
+        {
+            duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()
-            .with_context(|| format!("calling function '{name}'", name = self.name))?;
+            .with_context(|| format!("calling function '{name}'", name = self.name))?
+        } else {
+            "aborted by user".to_owned()
+        };
         Ok(try_compact_json(&content))
     }
 
