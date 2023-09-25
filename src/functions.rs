@@ -67,8 +67,11 @@ impl Provider {
         {
             duct::cmd(&self.command, &self.args)
                 .stdin_bytes(arguments)
+                .stderr_to_stdout()
+                .unchecked()
                 .read()
-                .map_or_else(ProviderResponse::Failure, ProviderResponse::Success)
+                .map(ProviderResponse::Executed)
+                .expect("unchecked commands should never fail")
         } else {
             ProviderResponse::Aborted
         };
@@ -229,8 +232,7 @@ pub enum FunctionResponse {
 }
 
 pub enum ProviderResponse {
-    Success(String),
-    Failure(std::io::Error),
+    Executed(String),
     Aborted,
 }
 
@@ -239,7 +241,7 @@ impl std::fmt::Display for FunctionResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Found(response) => write!(f, "{response}"),
-            Self::NotFound => write!(f, "function not implemented or not found"),
+            Self::NotFound => write!(f, "function not found or not implemented"),
         }
     }
 }
@@ -248,9 +250,8 @@ impl std::fmt::Display for ProviderResponse {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Success(content) => write!(f, "{content}", content = try_compact_json(content)),
-            Self::Failure(err) => write!(f, "function call failed: {err}"),
-            Self::Aborted => write!(f, "function call aborted by user"),
+            Self::Executed(output) => write!(f, "{output}", output = try_compact_json(output)),
+            Self::Aborted => write!(f, "function call aborted by the user"),
         }
     }
 }
