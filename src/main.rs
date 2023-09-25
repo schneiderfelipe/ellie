@@ -59,7 +59,7 @@ fn create_function_message(
     let content = functions::Functions::load()
         .unwrap_or_default()
         .get_provider(name)
-        .context("getting function provider")?
+        .with_context(||format!("getting function provider for '{name}'"))?
         .call(arguments)?;
     log::info!("{name}({arguments}) = {content}");
 

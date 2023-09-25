@@ -54,7 +54,7 @@ impl Provider {
         let content = duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()
-            .context("calling function")?;
+            .with_context(|| format!("calling function '{name}'", name = self.name))?;
         Ok(try_compact_json(&content))
     }
 
@@ -70,7 +70,12 @@ impl Provider {
                 .chain(std::iter::once("spec")),
         )
         .read()
-        .context("getting function specification")?;
+        .with_context(|| {
+            format!(
+                "getting function specification for '{name}'",
+                name = self.name
+            )
+        })?;
 
         let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
         if spec.name != self.name {
