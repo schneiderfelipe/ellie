@@ -55,15 +55,9 @@ fn create_function_message(
     name: &str,
     arguments: &str,
 ) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let content = if let Some(provider) = functions::Functions::load()
+    let content = functions::Functions::load()
         .unwrap_or_default()
-        .get_provider(name)
-    {
-        provider.call(arguments)?
-    } else {
-        "not implemented".to_owned()
-    };
-
+        .call(name, arguments)?;
     log::info!("{name}({arguments}) = {content}");
     Ok(aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)

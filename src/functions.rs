@@ -40,7 +40,7 @@ fn merge(spec: &mut ChatCompletionFunctions, patch: &ChatCompletionFunctions) {
 
 /// Function provider.
 #[derive(Debug, serde::Deserialize)]
-pub struct Provider {
+struct Provider {
     /// Function provider name.
     name: String,
 
@@ -59,7 +59,7 @@ pub struct Provider {
 impl Provider {
     /// Call provider with the given standard input arguments.
     #[inline]
-    pub(super) fn call(&self, arguments: &str) -> color_eyre::Result<String> {
+    fn call(&self, arguments: &str) -> color_eyre::Result<String> {
         use eyre::Context as _;
 
         let content = duct::cmd(&self.command, &self.args)
@@ -176,13 +176,21 @@ impl Functions {
     }
 
     #[inline]
-    pub(super) fn get_provider(&self, name: &str) -> Option<&Provider> {
+    fn get_provider(&self, name: &str) -> Option<&Provider> {
         self.providers().find(|provider| provider.name == name)
     }
 
     #[inline]
     fn get_function(&self, name: &str) -> Option<&ChatCompletionFunctions> {
         self.functions().find(|function| function.name == name)
+    }
+
+    #[inline]
+    pub(super) fn call(&self, name: &str, arguments: &str) -> color_eyre::Result<String> {
+        self.get_provider(name).map_or_else(
+            || Ok("not implemented".to_owned()),
+            |provider| provider.call(arguments),
+        )
     }
 
     #[inline]
