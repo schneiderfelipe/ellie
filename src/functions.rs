@@ -61,10 +61,12 @@ impl Provider {
     fn call(&self, arguments: &str) -> color_eyre::eyre::Result<String> {
         use color_eyre::eyre::Context as _;
 
-        log::info!("{name}({arguments})", name = self.name);
         let content = if self.safe
             || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
-                .with_prompt("Execute function provider?")
+                .with_prompt(format!(
+                    "{name}({arguments})\n\nWould you like to execute this function provider?",
+                    name = self.name
+                ))
                 .interact()?
         {
             duct::cmd(&self.command, &self.args)
