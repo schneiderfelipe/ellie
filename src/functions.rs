@@ -65,13 +65,10 @@ impl Provider {
                 .with_prompt("Do you want to execute?")
                 .interact()?
         {
-            match duct::cmd(&self.command, &self.args)
+            duct::cmd(&self.command, &self.args)
                 .stdin_bytes(arguments)
                 .read()
-            {
-                Ok(content) => ProviderResponse::Success(try_compact_json(&content)),
-                Err(err) => ProviderResponse::Failure(err),
-            }
+                .map_or_else(ProviderResponse::Failure, ProviderResponse::Success)
         } else {
             ProviderResponse::Aborted
         };
@@ -208,11 +205,7 @@ impl Functions {
     ) -> Result<FunctionResponse, dialoguer::Error> {
         self.get_provider(name).map_or_else(
             || Ok(FunctionResponse::NotFound),
-            |provider| {
-                provider
-                    .call(arguments)
-                    .map(FunctionResponse::ProviderResponse)
-            },
+            |provider| provider.call(arguments).map(Into::into),
         )
     }
 
@@ -230,34 +223,34 @@ impl Functions {
     }
 }
 
+pub enum FunctionResponse {
+    Found(ProviderResponse),
+    NotFound,
+}
+
 pub enum ProviderResponse {
     Success(String),
     Failure(std::io::Error),
     Aborted,
 }
 
-impl std::fmt::Display for ProviderResponse {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Success(success) => write!(f, "{success}"),
-            Self::Failure(failure) => write!(f, "function call failed: {failure}"),
-            Self::Aborted => write!(f, "function call aborted by user"),
-        }
-    }
-}
-
-pub enum FunctionResponse {
-    ProviderResponse(ProviderResponse),
-    NotFound,
-}
-
 impl std::fmt::Display for FunctionResponse {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ProviderResponse(response) => write!(f, "{response}"),
+            Self::Found(response) => write!(f, "{response}"),
             Self::NotFound => write!(f, "function not implemented or not found"),
+        }
+    }
+}
+
+impl std::fmt::Display for ProviderResponse {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Success(content) => write!(f, "{content}", content = try_compact_json(content)),
+            Self::Failure(err) => write!(f, "function call failed: {err}"),
+            Self::Aborted => write!(f, "function call aborted by user"),
         }
     }
 }
@@ -266,5 +259,12 @@ impl From<FunctionResponse> for String {
     #[inline]
     fn from(response: FunctionResponse) -> Self {
         response.to_string()
+    }
+}
+
+impl From<ProviderResponse> for FunctionResponse {
+    #[inline]
+    fn from(response: ProviderResponse) -> Self {
+        Self::Found(response)
     }
 }
