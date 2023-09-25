@@ -15,7 +15,7 @@ rust-version = "1.72.0"
 [dependencies]
 async-openai = { default-features = false, version = "0.14.0" }
 color-eyre = { version = "0.6.2", default-features = false }
-dialoguer = "0.11.0"
+dialoguer = { default-features = false, version = "0.11.0" }
 directories = "5.0.1"
 duct = "0.13.6"
 futures = { version = "0.3.28" , default-features = false }
