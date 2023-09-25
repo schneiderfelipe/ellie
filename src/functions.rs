@@ -63,7 +63,7 @@ impl Provider {
 
         log::info!("{name}({arguments})", name = self.name);
         let content = if self.safe
-            || dialoguer::Confirm::new()
+            || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
                 .with_prompt("Execute function provider?")
                 .interact()?
         {
