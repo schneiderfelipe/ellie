@@ -228,38 +228,18 @@ impl Functions {
 
 #[derive(Debug)]
 pub enum FunctionResponse {
-    Found(ProviderResponse),
-    NotFound,
-}
-
-pub enum ProviderResponse {
     Executed(String),
     Aborted,
+    NotFound,
 }
 
 impl std::fmt::Display for FunctionResponse {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Found(response) => write!(f, "{response}"),
-            Self::NotFound => write!(f, "function not found or not implemented"),
-        }
-    }
-}
-
-impl std::fmt::Display for ProviderResponse {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
             Self::Executed(output) => write!(f, "{output}", output = try_compact_json(output)),
             Self::Aborted => write!(f, "function call aborted by the user"),
+            Self::NotFound => write!(f, "function not found or not implemented"),
         }
-    }
-}
-
-impl From<ProviderResponse> for FunctionResponse {
-    #[inline]
-    fn from(response: ProviderResponse) -> Self {
-        Self::Found(response)
     }
 }
