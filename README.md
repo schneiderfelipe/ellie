@@ -40,7 +40,7 @@ When given an extra `spec` argument,
 it writes a specification to the standard output.
 
 For example,
-running the provider with the `spec` argument would output the following specification:
+executing the function provider with the `spec` argument would output the following specification:
 
 ```console
 $ python get_current_weather.py spec
