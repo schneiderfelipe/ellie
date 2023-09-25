@@ -48,9 +48,8 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
-/// Call the given function with the given arguments
-/// and build a message out of
-/// the returned contents.
+/// Call the given function with the given standard input arguments
+/// and build a message out of the returned contents.
 #[inline]
 fn create_function_message(
     name: &str,

@@ -38,17 +38,26 @@ fn merge(spec: &mut ChatCompletionFunctions, patch: &ChatCompletionFunctions) {
     }
 }
 
+/// Function provider.
 #[derive(Debug, serde::Deserialize)]
 pub struct Provider {
+    /// Function provider name.
     name: String,
+
+    /// Command to execute.
     command: String,
+
+    /// Command-line arguments to pass to command.
     #[serde(default)]
     args: Vec<String>,
+
+    /// Whether this provider can be safely executed without user confirmation.
     #[serde(default)]
     safe: bool,
 }
 
 impl Provider {
+    /// Call provider with the given standard input arguments.
     #[inline]
     pub(super) fn call(&self, arguments: &str) -> color_eyre::Result<String> {
         use eyre::Context as _;
