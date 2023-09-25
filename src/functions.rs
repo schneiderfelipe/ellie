@@ -208,7 +208,11 @@ impl Functions {
     ) -> Result<FunctionResponse, dialoguer::Error> {
         self.get_provider(name).map_or_else(
             || Ok(FunctionResponse::NotFound),
-            |provider| provider.call(arguments).map(Into::into),
+            |provider| {
+                provider.call(arguments).map(|response| {
+                    response.map_or_else(|| FunctionResponse::Aborted, FunctionResponse::Executed)
+                })
+            },
         )
     }
 
