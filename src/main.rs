@@ -164,7 +164,7 @@ async fn create_assistant_message(
                 } in choices
                 {
                     if let Some(role) = role {
-                        eyre::ensure!(matches!(role, aot::Role::Assistant), "bad role: {role}");
+                        eyre::ensure!(matches!(role, aot::Role::Assistant), "bad role '{role}'");
                     }
                     if let Some(content) = content {
                         stdout.write_all(content.as_ref()).await?;
@@ -201,7 +201,7 @@ async fn create_assistant_message(
                                     .build()?);
                             }
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
-                            finish_reason => unreachable!("bad finish reason: {finish_reason}"),
+                            finish_reason => unreachable!("bad finish reason '{finish_reason}'"),
                         }
                     }
                 }
@@ -242,7 +242,7 @@ fn update_new_messages(
             new_messages.push(assistant_message);
             new_messages.push(function_message);
         }
-        assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
+        assistant_message => unreachable!("bad assistant message '{assistant_message:?}'"),
     }
 
     Ok(())
