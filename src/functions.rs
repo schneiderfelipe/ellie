@@ -44,6 +44,8 @@ pub struct Provider {
     command: String,
     #[serde(default)]
     args: Vec<String>,
+    #[serde(default)]
+    safe: bool,
 }
 
 impl Provider {
@@ -119,6 +121,7 @@ impl Functions {
                      name,
                      command,
                      args,
+                     safe,
                  }| {
                     args.into_iter()
                         .map(|arg| shellexpand::full(&arg).map(Into::into))
@@ -127,6 +130,7 @@ impl Functions {
                             name,
                             command,
                             args,
+                            safe,
                         })
                 },
             )
