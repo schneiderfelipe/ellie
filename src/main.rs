@@ -62,7 +62,7 @@ fn create_function_message(
     {
         provider.call(arguments)?
     } else {
-        "not implemented".to_string()
+        "not implemented".to_owned()
     };
 
     log::info!("{name}({arguments}) = {content}");
