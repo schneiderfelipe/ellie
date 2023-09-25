@@ -226,6 +226,7 @@ impl Functions {
     }
 }
 
+#[derive(Debug)]
 pub enum FunctionResponse {
     Found(ProviderResponse),
     NotFound,
@@ -253,13 +254,6 @@ impl std::fmt::Display for ProviderResponse {
             Self::Executed(output) => write!(f, "{output}", output = try_compact_json(output)),
             Self::Aborted => write!(f, "function call aborted by the user"),
         }
-    }
-}
-
-impl From<FunctionResponse> for String {
-    #[inline]
-    fn from(response: FunctionResponse) -> Self {
-        response.to_string()
     }
 }
 
