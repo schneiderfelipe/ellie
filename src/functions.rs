@@ -1,9 +1,8 @@
 use async_openai::types::ChatCompletionFunctions;
-use color_eyre::eyre;
 
 #[inline]
-fn get_project_dirs() -> color_eyre::Result<directories::ProjectDirs> {
-    use eyre::ContextCompat as _;
+fn get_project_dirs() -> color_eyre::eyre::Result<directories::ProjectDirs> {
+    use color_eyre::eyre::ContextCompat as _;
 
     directories::ProjectDirs::from("io.github", "schneiderfelipe", "ellie")
         .context("getting project directories")
@@ -59,8 +58,8 @@ struct Provider {
 impl Provider {
     /// Call provider with the given standard input arguments.
     #[inline]
-    fn call(&self, arguments: &str) -> color_eyre::Result<String> {
-        use eyre::Context as _;
+    fn call(&self, arguments: &str) -> color_eyre::eyre::Result<String> {
+        use color_eyre::eyre::Context as _;
 
         log::info!("{name}({arguments})", name = self.name);
         let content = duct::cmd(&self.command, &self.args)
@@ -71,8 +70,8 @@ impl Provider {
     }
 
     #[inline]
-    fn specification(&self) -> eyre::Result<ChatCompletionFunctions> {
-        use eyre::Context as _;
+    fn specification(&self) -> color_eyre::eyre::Result<ChatCompletionFunctions> {
+        use color_eyre::eyre::Context as _;
 
         let spec = duct::cmd(
             &self.command,
@@ -109,7 +108,7 @@ pub struct Functions {
 
 impl Functions {
     #[inline]
-    pub(super) fn load() -> eyre::Result<Self> {
+    pub(super) fn load() -> color_eyre::eyre::Result<Self> {
         use itertools::Itertools as _;
 
         let content =
@@ -193,7 +192,7 @@ impl Functions {
     }
 
     #[inline]
-    pub(super) fn call(&self, name: &str, arguments: &str) -> color_eyre::Result<String> {
+    pub(super) fn call(&self, name: &str, arguments: &str) -> color_eyre::eyre::Result<String> {
         self.get_provider(name).map_or_else(
             || Ok("not implemented".to_owned()),
             |provider| provider.call(arguments),
@@ -203,7 +202,7 @@ impl Functions {
     #[inline]
     pub(super) fn specifications(
         &self,
-    ) -> impl Iterator<Item = eyre::Result<ChatCompletionFunctions>> + '_ {
+    ) -> impl Iterator<Item = color_eyre::eyre::Result<ChatCompletionFunctions>> + '_ {
         self.providers().map(|provider| {
             let mut spec = provider.specification()?;
             if let Some(function) = self.get_function(&spec.name) {

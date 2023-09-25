@@ -1,6 +1,4 @@
 use async_openai::types as aot;
-use color_eyre::eyre;
-use eyre::{Context as _, ContextCompat as _};
 
 mod functions;
 
@@ -27,10 +25,10 @@ const MODELS: [&str; 4] = [
 fn messages_fit_model(
     model: &str,
     messages: &[aot::ChatCompletionRequestMessage],
-) -> eyre::Result<bool> {
+) -> color_eyre::eyre::Result<bool> {
     Ok(
         tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
-            .map_err(|err| eyre::eyre!(err))?
+            .map_err(|err| color_eyre::eyre::eyre!(err))?
             >= MIN_COMPLETION_TOKENS,
     )
 }
@@ -54,7 +52,7 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
 fn create_function_message(
     name: &str,
     arguments: &str,
-) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+) -> color_eyre::eyre::Result<aot::ChatCompletionRequestMessage> {
     let content = functions::Functions::load()
         .unwrap_or_default()
         .call(name, arguments)?;
@@ -71,13 +69,13 @@ fn create_function_message(
 /// # Errors
 /// If the created message could not fit the cheapest model alone.
 #[inline]
-fn create_user_message(input: &str) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+fn create_user_message(input: &str) -> color_eyre::eyre::Result<aot::ChatCompletionRequestMessage> {
     let input = input.trim();
     let messages = [aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::User)
         .content(input)
         .build()?];
-    eyre::ensure!(
+    color_eyre::eyre::ensure!(
         messages_fit_model(MODELS[0], &messages)?,
         "user input should fit model '{model}'",
         model = MODELS[0]
@@ -103,7 +101,9 @@ fn create_chat_messages(
 #[inline]
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
-) -> eyre::Result<aot::CreateChatCompletionRequest> {
+) -> color_eyre::eyre::Result<aot::CreateChatCompletionRequest> {
+    use color_eyre::eyre::ContextCompat as _;
+
     let mut request = aot::CreateChatCompletionRequestArgs::default();
     request.temperature(TEMPERATURE);
 
@@ -138,9 +138,10 @@ async fn create_response<C: async_openai::config::Config + Sync>(
 #[inline]
 async fn create_assistant_message(
     mut response: aot::ChatCompletionResponseStream,
-) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+) -> color_eyre::eyre::Result<aot::ChatCompletionRequestMessage> {
     use std::fmt::Write as _;
 
+    use color_eyre::eyre::Context as _;
     use futures::StreamExt as _;
     use tokio::io::AsyncWriteExt as _;
 
@@ -150,7 +151,7 @@ async fn create_assistant_message(
     let mut function_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
         match result.context("receiving response chunk") {
-            Err(err) => eyre::bail!(err),
+            Err(err) => color_eyre::eyre::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
                 for aot::ChatCompletionResponseStreamMessage {
                     delta:
@@ -164,7 +165,10 @@ async fn create_assistant_message(
                 } in choices
                 {
                     if let Some(role) = role {
-                        eyre::ensure!(matches!(role, aot::Role::Assistant), "bad role '{role}'");
+                        color_eyre::eyre::ensure!(
+                            matches!(role, aot::Role::Assistant),
+                            "bad role '{role}'"
+                        );
                     }
                     if let Some(content) = content {
                         stdout.write_all(content.as_ref()).await?;
@@ -215,7 +219,7 @@ async fn create_assistant_message(
 fn update_new_messages(
     new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
     assistant_message: aot::ChatCompletionRequestMessage,
-) -> eyre::Result<()> {
+) -> color_eyre::eyre::Result<()> {
     match assistant_message {
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,
@@ -249,7 +253,9 @@ fn update_new_messages(
 }
 
 #[tokio::main]
-async fn main() -> eyre::Result<()> {
+async fn main() -> color_eyre::eyre::Result<()> {
+    use color_eyre::eyre::Context as _;
+
     pretty_env_logger::init();
     color_eyre::install()?;
 
