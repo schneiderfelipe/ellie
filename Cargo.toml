@@ -18,7 +18,7 @@ color-eyre = { version = "0.6.2", default-features = false }
 dialoguer = { default-features = false, version = "0.11.0" }
 directories = "5.0.1"
 duct = "0.13.6"
-either = "1.9.0"
+either = { default-features = false, version = "1.9.0" }
 futures = { version = "0.3.28" , default-features = false }
 itertools = "0.11.0"
 json-patch = { default-features = false, version = "1.0.0" }
@@ -28,5 +28,5 @@ serde = { version = "1.0.188", default-features = false }
 serde_json = { version = "1.0.105", default-features = false }
 shellexpand = "3.1.0"
 tiktoken-rs = { version = "0.5.3", features = ["async-openai"] }
-tokio = { version = "1.32.0", features = ["rt-multi-thread", "io-std"], default-features = false }
+tokio = { version = "1.32.0", features = ["io-std", "rt-multi-thread"], default-features = false }
 toml = { features = ["parse"], default-features = false, version = "0.7.6" }
