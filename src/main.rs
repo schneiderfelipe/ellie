@@ -79,7 +79,7 @@ fn create_user_message(input: &str) -> eyre::Result<aot::ChatCompletionRequestMe
         .build()?];
     eyre::ensure!(
         messages_fit_model(MODELS[0], &messages)?,
-        "user input should fit {model}",
+        "user input should fit model {model}",
         model = MODELS[0]
     );
     let [message] = messages;
@@ -109,7 +109,7 @@ fn create_request(
 
     let model = choose_model(&messages)
         .context("choosing model with large enough context length for the given messages")?;
-    log::info!("{model}");
+    log::info!("model {model}");
     request.model(model);
 
     let functions = functions::Functions::load()
@@ -128,7 +128,7 @@ async fn create_response<C: async_openai::config::Config + Sync>(
     request: aot::CreateChatCompletionRequest,
 ) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
     log::debug!(
-        "{request}",
+        "request {request}",
         request =
             serde_json::to_string(&request).expect("serialization of requests should never fail")
     );
