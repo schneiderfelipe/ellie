@@ -58,7 +58,7 @@ struct Provider {
 impl Provider {
     /// Call provider with the given standard input arguments.
     #[inline]
-    fn call(&self, arguments: &str) -> color_eyre::eyre::Result<String> {
+    fn call(&self, arguments: &str) -> Result<impl Into<String>, dialoguer::Error> {
         use color_eyre::eyre::Context as _;
 
         log::warn!("{name}({arguments})", name = self.name);
@@ -67,10 +67,14 @@ impl Provider {
                 .with_prompt("Do you want to execute?")
                 .interact()?
         {
-            duct::cmd(&self.command, &self.args)
+            match duct::cmd(&self.command, &self.args)
             .stdin_bytes(arguments)
             .read()
-            .with_context(|| format!("calling function '{name}'", name = self.name))?
+            .with_context(|| format!("calling function '{name}'", name = self.name))
+            {
+                Ok(content) => content,
+                Err(err) => err.to_string(),
+            }
         } else {
             "aborted by user".to_owned()
         };
@@ -200,10 +204,14 @@ impl Functions {
     }
 
     #[inline]
-    pub(super) fn call(&self, name: &str, arguments: &str) -> color_eyre::eyre::Result<String> {
+    pub(super) fn call(
+        &self,
+        name: &str,
+        arguments: &str,
+    ) -> Result<impl Into<String>, dialoguer::Error> {
         self.get_provider(name).map_or_else(
             || Ok("not implemented".to_owned()),
-            |provider| provider.call(arguments),
+            |provider| provider.call(arguments).map(Into::into),
         )
     }
 

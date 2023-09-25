@@ -18,6 +18,7 @@ color-eyre = { version = "0.6.2", default-features = false }
 dialoguer = { default-features = false, version = "0.11.0" }
 directories = "5.0.1"
 duct = "0.13.6"
+either = "1.9.0"
 futures = { version = "0.3.28" , default-features = false }
 itertools = "0.11.0"
 json-patch = { default-features = false, version = "1.0.0" }
