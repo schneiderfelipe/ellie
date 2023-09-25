@@ -54,19 +54,19 @@ fn create_function_message(
     arguments: &str,
 ) -> Result<
     aot::ChatCompletionRequestMessage,
-    either::Either<dialoguer::Error, async_openai::error::OpenAIError>,
+    either::Either<async_openai::error::OpenAIError, dialoguer::Error>,
 > {
-    let content = functions::Functions::load()
+    let response = functions::Functions::load()
         .unwrap_or_default()
         .call(name, arguments)
-        .map_err(either::Either::Left)?;
-    log::info!("{name}({arguments}) = {content:?}");
+        .map_err(either::Either::Right)?;
+    log::info!("{name}({arguments}) = {response}");
     aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
         .name(name)
-        .content(content)
+        .content(response)
         .build()
-        .map_err(either::Either::Right)
+        .map_err(either::Either::Left)
 }
 
 /// Create a user message for the given input.
@@ -224,7 +224,7 @@ async fn create_assistant_message(
 fn update_new_messages(
     new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
     assistant_message: aot::ChatCompletionRequestMessage,
-) -> Result<(), either::Either<dialoguer::Error, async_openai::error::OpenAIError>> {
+) -> Result<(), either::Either<async_openai::error::OpenAIError, dialoguer::Error>> {
     match assistant_message {
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,

@@ -58,11 +58,9 @@ struct Provider {
 impl Provider {
     /// Call provider with the given standard input arguments.
     #[inline]
-    fn call(&self, arguments: &str) -> Result<String, dialoguer::Error> {
-        use color_eyre::eyre::Context as _;
-
+    fn call(&self, arguments: &str) -> Result<ProviderResponse, dialoguer::Error> {
         log::warn!("{name}({arguments})", name = self.name);
-        let content = if self.safe
+        let response = if self.safe
             || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
                 .with_prompt("Do you want to execute?")
                 .interact()?
@@ -70,15 +68,14 @@ impl Provider {
             match duct::cmd(&self.command, &self.args)
                 .stdin_bytes(arguments)
                 .read()
-                .with_context(|| format!("calling function '{name}'", name = self.name))
             {
-                Ok(content) => content,
-                Err(err) => format!("function call failed: {err}"),
+                Ok(content) => ProviderResponse::Success(try_compact_json(&content)),
+                Err(err) => ProviderResponse::Failure(err),
             }
         } else {
-            "aborted by user".to_owned()
+            ProviderResponse::Aborted
         };
-        Ok(try_compact_json(&content))
+        Ok(response)
     }
 
     #[inline]
@@ -204,10 +201,18 @@ impl Functions {
     }
 
     #[inline]
-    pub(super) fn call(&self, name: &str, arguments: &str) -> Result<String, dialoguer::Error> {
+    pub(super) fn call(
+        &self,
+        name: &str,
+        arguments: &str,
+    ) -> Result<FunctionResponse, dialoguer::Error> {
         self.get_provider(name).map_or_else(
-            || Ok("not implemented".to_owned()),
-            |provider| provider.call(arguments),
+            || Ok(FunctionResponse::NotFound),
+            |provider| {
+                provider
+                    .call(arguments)
+                    .map(FunctionResponse::ProviderResponse)
+            },
         )
     }
 
@@ -222,5 +227,44 @@ impl Functions {
             }
             Ok(spec)
         })
+    }
+}
+
+pub enum ProviderResponse {
+    Success(String),
+    Failure(std::io::Error),
+    Aborted,
+}
+
+impl std::fmt::Display for ProviderResponse {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Success(success) => write!(f, "{success}"),
+            Self::Failure(failure) => write!(f, "function call failed: {failure}"),
+            Self::Aborted => write!(f, "function call aborted by user"),
+        }
+    }
+}
+
+pub enum FunctionResponse {
+    ProviderResponse(ProviderResponse),
+    NotFound,
+}
+
+impl std::fmt::Display for FunctionResponse {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ProviderResponse(response) => write!(f, "{response}"),
+            Self::NotFound => write!(f, "function not implemented or not found"),
+        }
+    }
+}
+
+impl From<FunctionResponse> for String {
+    #[inline]
+    fn from(response: FunctionResponse) -> Self {
+        response.to_string()
     }
 }
