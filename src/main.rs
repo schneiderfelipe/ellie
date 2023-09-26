@@ -80,7 +80,8 @@ fn create_user_message(input: &str) -> color_eyre::eyre::Result<aot::ChatComplet
         .content(input)
         .build()?];
     color_eyre::eyre::ensure!(
-        messages_fit_model(MODELS[0], &messages)?,
+        messages_fit_model(MODELS[0], &messages)
+            .expect("model retrieval of known models should never fail"),
         "user input should fit model '{model}'",
         model = MODELS[0]
     );

@@ -1,11 +1,8 @@
 use async_openai::types::ChatCompletionFunctions;
 
 #[inline]
-fn get_project_dirs() -> color_eyre::eyre::Result<directories::ProjectDirs> {
-    use color_eyre::eyre::ContextCompat as _;
-
+fn get_project_dirs() -> Option<directories::ProjectDirs> {
     directories::ProjectDirs::from("io.github", "schneiderfelipe", "ellie")
-        .context("getting project directories")
 }
 
 /// Trim text
@@ -90,9 +87,9 @@ impl Provider {
     }
 
     #[inline]
-    fn specification(&self) -> color_eyre::eyre::Result<ChatCompletionFunctions> {
-        use color_eyre::eyre::Context as _;
-
+    fn specification(
+        &self,
+    ) -> Result<ChatCompletionFunctions, either::Either<serde_json::Error, std::io::Error>> {
         let spec = duct::cmd(
             &self.command,
             self.args
@@ -101,14 +98,10 @@ impl Provider {
                 .chain(std::iter::once("spec")),
         )
         .read()
-        .with_context(|| {
-            format!(
-                "getting function specification for '{name}'",
-                name = self.name
-            )
-        })?;
+        .map_err(either::Either::Right)?;
 
-        let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
+        let mut spec: ChatCompletionFunctions =
+            serde_json::from_str(&spec).map_err(either::Either::Left)?;
         if spec.name != self.name {
             log::warn!("'{name}' != '{other}'", name = self.name, other = spec.name);
             spec.name = self.name.clone();
@@ -128,10 +121,15 @@ pub struct Functions {
 impl Functions {
     #[inline]
     pub(super) fn load() -> color_eyre::eyre::Result<Self> {
+        use color_eyre::eyre::ContextCompat as _;
         use itertools::Itertools as _;
 
-        let content =
-            std::fs::read_to_string(get_project_dirs()?.config_dir().join("functions.toml"))?;
+        let content = std::fs::read_to_string(
+            get_project_dirs()
+                .context("getting project directories")?
+                .config_dir()
+                .join("functions.toml"),
+        )?;
         let Self { provider, function } = toml::from_str(&content)?;
 
         let provider: Vec<_> = provider
@@ -225,8 +223,12 @@ impl Functions {
     pub(super) fn specifications(
         &self,
     ) -> impl Iterator<Item = color_eyre::eyre::Result<ChatCompletionFunctions>> + '_ {
+        use color_eyre::eyre::Context as _;
+
         self.providers().map(|provider| {
-            let mut spec = provider.specification()?;
+            let mut spec = provider
+                .specification()
+                .with_context(|| format!("getting function specification for {provider:?}"))?;
             if let Some(function) = self.get_function(&spec.name) {
                 merge(&mut spec, function);
             }
