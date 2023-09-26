@@ -59,7 +59,7 @@ fn create_function_message(
         .unwrap_or_default()
         .call(name, arguments)
         .map_err(either::Either::Right)?;
-    log::info!("{name}({arguments}):\n{response:?}");
+    log::info!("{name}({arguments}): {response:?}");
     aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
         .name(name)
