@@ -60,10 +60,11 @@ impl Provider {
     #[inline]
     fn is_approved(&self, arguments: &str) -> dialoguer::Result<bool> {
         log::warn!("{name}({arguments})", name = self.name);
-        Ok(self.safe
+        let is_approved = self.safe
             || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
                 .with_prompt("Do you approve command execution?")
-                .interact()?)
+                .interact()?;
+        Ok(is_approved)
     }
 
     /// Call provider with the given standard input arguments,
@@ -74,17 +75,18 @@ impl Provider {
     /// and this function returns [`None`].
     #[inline]
     fn call(&self, arguments: &str) -> dialoguer::Result<Option<String>> {
-        Ok(if self.is_approved(arguments)? {
-            duct::cmd(&self.command, &self.args)
+        let response = if self.is_approved(arguments)? {
+            let response = duct::cmd(&self.command, &self.args)
                 .stdin_bytes(arguments)
                 .stderr_to_stdout()
                 .unchecked()
                 .read()
-                .map(Some)
-                .expect("unchecked command execution should never fail")
+                .expect("unchecked command execution should never fail");
+            Some(response)
         } else {
             None
-        })
+        };
+        Ok(response)
     }
 
     #[inline]
@@ -111,7 +113,6 @@ impl Provider {
             log::warn!("'{name}' != '{other}'", name = self.name, other = spec.name);
             spec.name = self.name.clone();
         }
-
         Ok(spec)
     }
 }
@@ -185,7 +186,6 @@ impl Functions {
             })
             .map(|(_, function)| function)
             .collect();
-
         Ok(Self { provider, function })
     }
 

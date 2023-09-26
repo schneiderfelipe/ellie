@@ -26,11 +26,10 @@ fn messages_fit_model(
     model: &str,
     messages: &[aot::ChatCompletionRequestMessage],
 ) -> color_eyre::eyre::Result<bool> {
-    Ok(
-        tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
-            .map_err(|err| color_eyre::eyre::eyre!(err))?
-            >= MIN_COMPLETION_TOKENS,
-    )
+    let max_tokens = tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
+        .map_err(|err| color_eyre::eyre::eyre!(err))?
+        >= MIN_COMPLETION_TOKENS;
+    Ok(max_tokens)
 }
 
 /// Find the cheapest model with large enough context length for the given
@@ -253,7 +252,6 @@ fn update_new_messages(
         }
         assistant_message => unreachable!("bad assistant message '{assistant_message:?}'"),
     }
-
     Ok(())
 }
 
@@ -286,6 +284,5 @@ async fn main() -> color_eyre::eyre::Result<()> {
 
         update_new_messages(&mut new_messages, assistant_message)?;
     }
-
     Ok(())
 }
