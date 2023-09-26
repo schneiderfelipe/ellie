@@ -63,7 +63,7 @@ impl Provider {
     /// If denied by the user,
     /// command execution is aborted.
     #[inline]
-    fn call(&self, arguments: &str) -> Result<ProviderResponse, dialoguer::Error> {
+    fn call(&self, arguments: &str) -> dialoguer::Result<ProviderResponse> {
         log::warn!("{name}({arguments})", name = self.name);
         let response = if self.safe
             || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
@@ -206,11 +206,7 @@ impl Functions {
     }
 
     #[inline]
-    pub(super) fn call(
-        &self,
-        name: &str,
-        arguments: &str,
-    ) -> Result<FunctionResponse, dialoguer::Error> {
+    pub(super) fn call(&self, name: &str, arguments: &str) -> dialoguer::Result<FunctionResponse> {
         let response = if let Some(provider) = self.get_provider(name) {
             provider
                 .call(arguments)?
