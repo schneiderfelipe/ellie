@@ -57,6 +57,15 @@ struct Provider {
 }
 
 impl Provider {
+    #[inline]
+    fn is_approved(&self, arguments: &str) -> dialoguer::Result<bool> {
+        log::warn!("{name}({arguments})", name = self.name);
+        Ok(self.safe
+            || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
+                .with_prompt("Do you approve command execution?")
+                .interact()?)
+    }
+
     /// Call provider with the given standard input arguments,
     /// returning the output produced by command execution.
     ///
@@ -64,12 +73,7 @@ impl Provider {
     /// command execution is aborted.
     #[inline]
     fn call(&self, arguments: &str) -> dialoguer::Result<ProviderResponse> {
-        log::warn!("{name}({arguments})", name = self.name);
-        let response = if self.safe
-            || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
-                .with_prompt("Do you approve command execution?")
-                .interact()?
-        {
+        let response = if self.is_approved(arguments)? {
             duct::cmd(&self.command, &self.args)
                 .stdin_bytes(arguments)
                 .stderr_to_stdout()
