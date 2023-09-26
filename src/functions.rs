@@ -46,23 +46,28 @@ struct Provider {
     /// Command to execute.
     command: String,
 
-    /// Command-line arguments to pass to command.
+    /// Command-line arguments to pass to command execution.
     #[serde(default)]
     args: Vec<String>,
 
-    /// Whether this provider can be safely executed without user confirmation.
+    /// Whether this provider command can be safely executed *without user
+    /// approval*.
     #[serde(default)]
     safe: bool,
 }
 
 impl Provider {
-    /// Call provider with the given standard input arguments.
+    /// Call provider with the given standard input arguments,
+    /// returning the output produced by command execution.
+    ///
+    /// If denied by the user,
+    /// command execution is aborted.
     #[inline]
     fn call(&self, arguments: &str) -> Result<ProviderResponse, dialoguer::Error> {
         log::warn!("{name}({arguments})", name = self.name);
         let response = if self.safe
             || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
-                .with_prompt("Do you want to execute?")
+                .with_prompt("Do you approve command execution?")
                 .interact()?
         {
             duct::cmd(&self.command, &self.args)
@@ -71,7 +76,7 @@ impl Provider {
                 .unchecked()
                 .read()
                 .map(ProviderResponse::Executed)
-                .expect("unchecked commands should never fail")
+                .expect("unchecked command execution should never fail")
         } else {
             ProviderResponse::Aborted
         };
@@ -242,8 +247,12 @@ impl std::fmt::Display for FunctionResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Executed(output) => write!(f, "{output}", output = try_compact_json(output)),
-            Self::Aborted => write!(f, "function call aborted by the user"),
-            Self::NotFound => write!(f, "function not found or not implemented"),
+            Self::Aborted => write!(f, "function call aborted: user denied command execution"),
+            Self::NotFound => write!(
+                f,
+                "function not found: the requested function is currently unavailable or not \
+                 implemented yet"
+            ),
         }
     }
 }

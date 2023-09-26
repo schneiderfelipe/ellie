@@ -37,7 +37,7 @@ fn messages_fit_model(
 /// messages.
 ///
 /// If no model with large enough context length can be found,
-/// this returns [`None`].
+/// this function returns [`None`].
 #[inline]
 fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'static str> {
     MODELS.into_iter().find(|model| {
