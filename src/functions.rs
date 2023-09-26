@@ -1,12 +1,8 @@
 use async_openai::types::ChatCompletionFunctions;
-use color_eyre::eyre;
 
 #[inline]
-fn get_project_dirs() -> color_eyre::Result<directories::ProjectDirs> {
-    use eyre::ContextCompat as _;
-
+fn get_project_dirs() -> Option<directories::ProjectDirs> {
     directories::ProjectDirs::from("io.github", "schneiderfelipe", "ellie")
-        .context("getting project directories")
 }
 
 /// Trim text
@@ -38,30 +34,62 @@ fn merge(spec: &mut ChatCompletionFunctions, patch: &ChatCompletionFunctions) {
     }
 }
 
+/// Function provider.
 #[derive(Debug, serde::Deserialize)]
-pub struct Provider {
+struct Provider {
+    /// Function provider name.
     name: String,
+
+    /// Command to execute.
     command: String,
+
+    /// Command-line arguments to pass to command execution.
     #[serde(default)]
     args: Vec<String>,
+
+    /// Whether this provider command can be safely executed *without user
+    /// approval*.
+    #[serde(default)]
+    safe: bool,
 }
 
 impl Provider {
     #[inline]
-    pub(super) fn call(&self, arguments: &str) -> color_eyre::Result<String> {
-        use eyre::Context as _;
+    fn is_approved(&self, arguments: &str) -> dialoguer::Result<bool> {
+        log::warn!("{name}({arguments})", name = self.name);
+        let is_approved = self.safe
+            || dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
+                .with_prompt("Do you approve command execution?")
+                .interact()?;
+        Ok(is_approved)
+    }
 
-        let content = duct::cmd(&self.command, &self.args)
-            .stdin_bytes(arguments)
-            .read()
-            .context("calling function")?;
-        Ok(try_compact_json(&content))
+    /// Call provider with the given standard input arguments,
+    /// returning the output produced by command execution.
+    ///
+    /// If denied by the user,
+    /// command execution is aborted,
+    /// and this function returns [`None`].
+    #[inline]
+    fn call(&self, arguments: &str) -> dialoguer::Result<Option<String>> {
+        let response = if self.is_approved(arguments)? {
+            let response = duct::cmd(&self.command, &self.args)
+                .stdin_bytes(arguments)
+                .stderr_to_stdout()
+                .unchecked()
+                .read()
+                .expect("unchecked command execution should never fail");
+            Some(response)
+        } else {
+            None
+        };
+        Ok(response)
     }
 
     #[inline]
-    fn specification(&self) -> eyre::Result<ChatCompletionFunctions> {
-        use eyre::Context as _;
-
+    fn specification(
+        &self,
+    ) -> Result<ChatCompletionFunctions, either::Either<serde_json::Error, std::io::Error>> {
         let spec = duct::cmd(
             &self.command,
             self.args
@@ -70,14 +98,14 @@ impl Provider {
                 .chain(std::iter::once("spec")),
         )
         .read()
-        .context("getting function specification")?;
+        .map_err(either::Either::Right)?;
 
-        let mut spec: ChatCompletionFunctions = serde_json::from_str(&spec)?;
+        let mut spec: ChatCompletionFunctions =
+            serde_json::from_str(&spec).map_err(either::Either::Left)?;
         if spec.name != self.name {
-            log::warn!("{} != {}", self.name, spec.name);
+            log::warn!("'{name}' != '{other}'", name = self.name, other = spec.name);
             spec.name = self.name.clone();
         }
-
         Ok(spec)
     }
 }
@@ -92,11 +120,16 @@ pub struct Functions {
 
 impl Functions {
     #[inline]
-    pub(super) fn load() -> eyre::Result<Self> {
+    pub(super) fn load() -> color_eyre::eyre::Result<Self> {
+        use color_eyre::eyre::ContextCompat as _;
         use itertools::Itertools as _;
 
-        let content =
-            std::fs::read_to_string(get_project_dirs()?.config_dir().join("functions.toml"))?;
+        let content = std::fs::read_to_string(
+            get_project_dirs()
+                .context("getting project directories")?
+                .config_dir()
+                .join("functions.toml"),
+        )?;
         let Self { provider, function } = toml::from_str(&content)?;
 
         let provider: Vec<_> = provider
@@ -105,7 +138,10 @@ impl Functions {
             .dedup_by_with_count(|p, q| p.name == q.name)
             .inspect(|(count, provider)| {
                 if *count > 1 {
-                    log::warn!("provider {} defined {} times", provider.name, count);
+                    log::warn!(
+                        "provider '{name}' defined {count} times",
+                        name = provider.name
+                    );
                 }
             })
             .map(|(_, provider)| provider)
@@ -114,6 +150,7 @@ impl Functions {
                      name,
                      command,
                      args,
+                     safe,
                  }| {
                     args.into_iter()
                         .map(|arg| shellexpand::full(&arg).map(Into::into))
@@ -122,6 +159,7 @@ impl Functions {
                             name,
                             command,
                             args,
+                            safe,
                         })
                 },
             )
@@ -132,18 +170,20 @@ impl Functions {
             .dedup_by_with_count(|f, g| f.name == g.name)
             .inspect(|(count, function)| {
                 if *count > 1 {
-                    log::warn!("function {} defined {} times", function.name, count);
+                    log::warn!(
+                        "function '{name}' defined {count} times",
+                        name = function.name
+                    );
                 }
                 if !provider
                     .iter()
                     .any(|provider| provider.name == function.name)
                 {
-                    log::warn!("function {} has no provider", function.name);
+                    log::warn!("function '{name}' has no provider", name = function.name);
                 }
             })
             .map(|(_, function)| function)
             .collect();
-
         Ok(Self { provider, function })
     }
 
@@ -158,7 +198,7 @@ impl Functions {
     }
 
     #[inline]
-    pub(super) fn get_provider(&self, name: &str) -> Option<&Provider> {
+    fn get_provider(&self, name: &str) -> Option<&Provider> {
         self.providers().find(|provider| provider.name == name)
     }
 
@@ -168,15 +208,53 @@ impl Functions {
     }
 
     #[inline]
+    pub(super) fn call(&self, name: &str, arguments: &str) -> dialoguer::Result<FunctionResponse> {
+        let response = if let Some(provider) = self.get_provider(name) {
+            provider
+                .call(arguments)?
+                .map_or(FunctionResponse::Aborted, FunctionResponse::Executed)
+        } else {
+            FunctionResponse::NotFound
+        };
+        Ok(response)
+    }
+
+    #[inline]
     pub(super) fn specifications(
         &self,
-    ) -> impl Iterator<Item = eyre::Result<ChatCompletionFunctions>> + '_ {
+    ) -> impl Iterator<Item = color_eyre::eyre::Result<ChatCompletionFunctions>> + '_ {
+        use color_eyre::eyre::Context as _;
+
         self.providers().map(|provider| {
-            let mut spec = provider.specification()?;
+            let mut spec = provider
+                .specification()
+                .with_context(|| format!("getting function specification for {provider:?}"))?;
             if let Some(function) = self.get_function(&spec.name) {
                 merge(&mut spec, function);
             }
             Ok(spec)
         })
+    }
+}
+
+#[derive(Debug)]
+pub enum FunctionResponse {
+    Executed(String),
+    Aborted,
+    NotFound,
+}
+
+impl std::fmt::Display for FunctionResponse {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Executed(output) => write!(f, "{output}", output = try_compact_json(output)),
+            Self::Aborted => write!(f, "function call aborted: user denied command execution"),
+            Self::NotFound => write!(
+                f,
+                "function not found: the requested function is currently unavailable or not \
+                 implemented yet"
+            ),
+        }
     }
 }

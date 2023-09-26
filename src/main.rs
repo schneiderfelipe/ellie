@@ -1,6 +1,4 @@
 use async_openai::types as aot;
-use color_eyre::eyre;
-use eyre::{Context as _, ContextCompat as _};
 
 mod functions;
 
@@ -27,19 +25,18 @@ const MODELS: [&str; 4] = [
 fn messages_fit_model(
     model: &str,
     messages: &[aot::ChatCompletionRequestMessage],
-) -> eyre::Result<bool> {
-    Ok(
-        tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
-            .map_err(|err| eyre::eyre!(err))?
-            >= MIN_COMPLETION_TOKENS,
-    )
+) -> color_eyre::eyre::Result<bool> {
+    let max_tokens = tiktoken_rs::async_openai::get_chat_completion_max_tokens(model, messages)
+        .map_err(|err| color_eyre::eyre::eyre!(err))?
+        >= MIN_COMPLETION_TOKENS;
+    Ok(max_tokens)
 }
 
 /// Find the cheapest model with large enough context length for the given
 /// messages.
 ///
 /// If no model with large enough context length can be found,
-/// this returns [`None`].
+/// this function returns [`None`].
 #[inline]
 fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'static str> {
     MODELS.into_iter().find(|model| {
@@ -48,26 +45,27 @@ fn choose_model(messages: &[aot::ChatCompletionRequestMessage]) -> Option<&'stat
     })
 }
 
-/// Call the given function with the given arguments
-/// and build a message out of
-/// the returned contents.
+/// Call the given function with the given standard input arguments
+/// and build a message out of the returned contents.
 #[inline]
 fn create_function_message(
     name: &str,
     arguments: &str,
-) -> eyre::Result<aot::ChatCompletionRequestMessage> {
-    let content = functions::Functions::load()
+) -> Result<
+    aot::ChatCompletionRequestMessage,
+    either::Either<async_openai::error::OpenAIError, dialoguer::Error>,
+> {
+    let response = functions::Functions::load()
         .unwrap_or_default()
-        .get_provider(name)
-        .context("getting function provider")?
-        .call(arguments)?;
-    log::info!("{name}({arguments}) = {content}");
-
-    Ok(aot::ChatCompletionRequestMessageArgs::default()
+        .call(name, arguments)
+        .map_err(either::Either::Right)?;
+    log::info!("{name}({arguments}): {response:?}");
+    aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::Function)
         .name(name)
-        .content(content)
-        .build()?)
+        .content(response.to_string())
+        .build()
+        .map_err(either::Either::Left)
 }
 
 /// Create a user message for the given input.
@@ -75,15 +73,16 @@ fn create_function_message(
 /// # Errors
 /// If the created message could not fit the cheapest model alone.
 #[inline]
-fn create_user_message(input: &str) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+fn create_user_message(input: &str) -> color_eyre::eyre::Result<aot::ChatCompletionRequestMessage> {
     let input = input.trim();
     let messages = [aot::ChatCompletionRequestMessageArgs::default()
         .role(aot::Role::User)
         .content(input)
         .build()?];
-    eyre::ensure!(
-        messages_fit_model(MODELS[0], &messages)?,
-        "user input should fit {model}",
+    color_eyre::eyre::ensure!(
+        messages_fit_model(MODELS[0], &messages)
+            .expect("model retrieval of known models should never fail"),
+        "user input should fit model '{model}'",
         model = MODELS[0]
     );
     let [message] = messages;
@@ -107,13 +106,15 @@ fn create_chat_messages(
 #[inline]
 fn create_request(
     messages: Vec<aot::ChatCompletionRequestMessage>,
-) -> eyre::Result<aot::CreateChatCompletionRequest> {
+) -> color_eyre::eyre::Result<aot::CreateChatCompletionRequest> {
+    use color_eyre::eyre::ContextCompat as _;
+
     let mut request = aot::CreateChatCompletionRequestArgs::default();
     request.temperature(TEMPERATURE);
 
     let model = choose_model(&messages)
         .context("choosing model with large enough context length for the given messages")?;
-    log::info!("{model}");
+    log::info!("model '{model}'");
     request.model(model);
 
     let functions = functions::Functions::load()
@@ -132,7 +133,7 @@ async fn create_response<C: async_openai::config::Config + Sync>(
     request: aot::CreateChatCompletionRequest,
 ) -> Result<aot::ChatCompletionResponseStream, async_openai::error::OpenAIError> {
     log::debug!(
-        "{request}",
+        "request '{request}'",
         request =
             serde_json::to_string(&request).expect("serialization of requests should never fail")
     );
@@ -142,9 +143,10 @@ async fn create_response<C: async_openai::config::Config + Sync>(
 #[inline]
 async fn create_assistant_message(
     mut response: aot::ChatCompletionResponseStream,
-) -> eyre::Result<aot::ChatCompletionRequestMessage> {
+) -> color_eyre::eyre::Result<aot::ChatCompletionRequestMessage> {
     use std::fmt::Write as _;
 
+    use color_eyre::eyre::Context as _;
     use futures::StreamExt as _;
     use tokio::io::AsyncWriteExt as _;
 
@@ -154,7 +156,7 @@ async fn create_assistant_message(
     let mut function_arguments_buffer = String::new();
     while let Some(result) = response.next().await {
         match result.context("receiving response chunk") {
-            Err(err) => eyre::bail!(err),
+            Err(err) => color_eyre::eyre::bail!(err),
             Ok(aot::CreateChatCompletionStreamResponse { choices, .. }) => {
                 for aot::ChatCompletionResponseStreamMessage {
                     delta:
@@ -168,7 +170,10 @@ async fn create_assistant_message(
                 } in choices
                 {
                     if let Some(role) = role {
-                        eyre::ensure!(matches!(role, aot::Role::Assistant), "bad role: {role}");
+                        color_eyre::eyre::ensure!(
+                            matches!(role, aot::Role::Assistant),
+                            "bad role '{role}'"
+                        );
                     }
                     if let Some(content) = content {
                         stdout.write_all(content.as_ref()).await?;
@@ -205,7 +210,7 @@ async fn create_assistant_message(
                                     .build()?);
                             }
                             // https://platform.openai.com/docs/api-reference/chat/streaming#choices-finish_reason
-                            finish_reason => unreachable!("bad finish reason: {finish_reason}"),
+                            finish_reason => unreachable!("bad finish reason '{finish_reason}'"),
                         }
                     }
                 }
@@ -219,7 +224,7 @@ async fn create_assistant_message(
 fn update_new_messages(
     new_messages: &mut Vec<aot::ChatCompletionRequestMessage>,
     assistant_message: aot::ChatCompletionRequestMessage,
-) -> eyre::Result<()> {
+) -> Result<(), either::Either<async_openai::error::OpenAIError, dialoguer::Error>> {
     match assistant_message {
         aot::ChatCompletionRequestMessage {
             role: aot::Role::Assistant,
@@ -246,14 +251,15 @@ fn update_new_messages(
             new_messages.push(assistant_message);
             new_messages.push(function_message);
         }
-        assistant_message => unreachable!("bad assistant message: {assistant_message:?}"),
+        assistant_message => unreachable!("bad assistant message '{assistant_message:?}'"),
     }
-
     Ok(())
 }
 
 #[tokio::main]
-async fn main() -> eyre::Result<()> {
+async fn main() -> color_eyre::eyre::Result<()> {
+    use color_eyre::eyre::Context as _;
+
     pretty_env_logger::init();
     color_eyre::install()?;
 
@@ -279,6 +285,5 @@ async fn main() -> eyre::Result<()> {
 
         update_new_messages(&mut new_messages, assistant_message)?;
     }
-
     Ok(())
 }
