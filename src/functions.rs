@@ -70,21 +70,21 @@ impl Provider {
     /// returning the output produced by command execution.
     ///
     /// If denied by the user,
-    /// command execution is aborted.
+    /// command execution is aborted,
+    /// and this function returns [`None`].
     #[inline]
-    fn call(&self, arguments: &str) -> dialoguer::Result<ProviderResponse> {
-        let response = if self.is_approved(arguments)? {
+    fn call(&self, arguments: &str) -> dialoguer::Result<Option<String>> {
+        Ok(if self.is_approved(arguments)? {
             duct::cmd(&self.command, &self.args)
                 .stdin_bytes(arguments)
                 .stderr_to_stdout()
                 .unchecked()
                 .read()
-                .map(ProviderResponse::Executed)
+                .map(Some)
                 .expect("unchecked command execution should never fail")
         } else {
-            ProviderResponse::Aborted
-        };
-        Ok(response)
+            None
+        })
     }
 
     #[inline]
