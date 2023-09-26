@@ -206,14 +206,14 @@ impl Functions {
         name: &str,
         arguments: &str,
     ) -> Result<FunctionResponse, dialoguer::Error> {
-        self.get_provider(name).map_or_else(
-            || Ok(FunctionResponse::NotFound),
-            |provider| {
-                provider.call(arguments).map(|response| {
-                    response.map_or_else(|| FunctionResponse::Aborted, FunctionResponse::Executed)
-                })
-            },
-        )
+        let response = if let Some(provider) = self.get_provider(name) {
+            provider
+                .call(arguments)?
+                .map_or(FunctionResponse::Aborted, FunctionResponse::Executed)
+        } else {
+            FunctionResponse::NotFound
+        };
+        Ok(response)
     }
 
     #[inline]
